@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from PIL import Image
 import io
-import datetime
+from datetime import datetime
 
 
 from models.Unet_FiLmLayer import *
@@ -32,11 +32,7 @@ def plt2tsb(figure, writer, fig_name, niter):
 
     # Add the image to TensorBoard
     writer.add_image(fig_name, image_tensor, niter)
-
-    # Add date and time to the title
-    current_datetime = datetime.datetime.now()
-    title_with_datetime = f"{fig_name} ({current_datetime})"
-    writer.add_text(fig_name, title_with_datetime, niter)
+    buf.close()
 
 def linear_beta_schedule(self, steps):
     """
@@ -108,6 +104,7 @@ class Diffusion(pl.LightningModule):
             prediction_type='epsilon'
             )
 
+        self.date = datetime.today().strftime('%Y-%m-%d-%H')
 
 
 
@@ -150,10 +147,10 @@ class Diffusion(pl.LightningModule):
         noise = torch.randn_like(x_0)
         x_noisy = self.q_forwardProcess(x_0, t, noise) # (B, 1 , pred_horizon, pred_dim)
 
-        # Inpainting
-        x_noisy[:, :, 0, :] = x_0[:, :, -1, :]
-        # Enforcing boundary conditions
-        x_noisy[:, :, :, 2:] = torch.clip(x_noisy[:, :, :, 2:], min=-1.0, max=1.0) 
+                # Inpaint: replace the first datapoint with the condition
+        x_noisy[:, : , 0, :] = x_0[:, : , -1, :5] # inpaint the first datapoint (should be enough)
+        x_noisy[:, :, :, 2] = torch.clip(x_noisy[:, :, :, 2], min=-1.0, max=1.0) # Enforce action limits (steering angle)
+        x_noisy[:, :, :, 3:] = torch.clip(x_noisy[:, :, :, 3:], min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
 
         # ---------------- Estimate noise / Single Backward process ----------------
         # Estimate noise using noise_predictor
@@ -188,7 +185,7 @@ class Diffusion(pl.LightningModule):
         normalized_img = batch['image'][:,:self.obs_horizon ,:] 
         normalized_pos = batch['position'][:,:self.obs_horizon ,:]
         normalized_act = batch['action'][:,:self.obs_horizon ,:]
-        normalized_vel = batch['velocity'][:,:self.obs_horizon ,:]
+        # normalized_vel = batch['velocity'][:,:self.obs_horizon ,:]
 
         # ---------------- Encoding Image data ----------------
         encoded_img = self.vision_encoder(normalized_img.flatten(end_dim=1)) # (B, 512)
@@ -196,7 +193,7 @@ class Diffusion(pl.LightningModule):
 
         # ---------------- Conditional vector ----------------
         # Concatenate position and action data and image features
-        obs_cond = torch.cat([normalized_pos, normalized_act, normalized_vel , image_features], dim=-1) # (B, t_0:t_obs, 512 + 3 + 2)
+        obs_cond = torch.cat([normalized_pos, normalized_act , image_features], dim=-1) # (B, t_0:t_obs, 512 + 3 + 2)
 
         # ---------------- Preparing Prediction data (acts as ground truth) ----------------
         x_0_pos = batch['position'][:,self.obs_horizon: ,:] # (B, t_obs:t_pred , 2)
@@ -221,7 +218,7 @@ class Diffusion(pl.LightningModule):
             obs_cond = obs_cond[0,...].unsqueeze(0).unsqueeze(1)
             
             # # Idea: Using the observations we predict the future action / position steps
-            x_0_predicted = self.p_reverseProcess_loop(x_cond = obs_cond) # Only one batch is used to be visualized
+            x_0_predicted = self.p_reverseProcess_loop(x_cond = obs_cond, x_0 = x_0) # Only one batch is used to be visualized
 
             # ---------------- Visualization / Prepare Data ----------------
             # Predictions
@@ -259,7 +256,7 @@ class Diffusion(pl.LightningModule):
             plt.axis('equal')
 
             # Plot to tensorboard
-            plt2tsb(fig, writer, 'Predicted_path', niter)
+            plt2tsb(fig, writer, 'Predicted_path ' + self.date , niter)
 
             # ---------------- Action Plotting ----------------
             # Visualize the action data
@@ -270,17 +267,18 @@ class Diffusion(pl.LightningModule):
             # ax1.scatter( np.arange(train_data['action'].shape[0]), train_data['action'][:,0] , c='r', s=1)
             ax2.plot(actions_predicted[:,1])
             ax2.plot(actions_groundtruth[:,1])
-            ax2.set_ylim(-1.1,1.1)
+            ax2.set_ylim(-0.1,1.1)
             # ax2.scatter( np.arange(train_data['action'].shape[0]), train_data['action'][:,1] , c='r', s=1)
             ax3.plot(actions_predicted[:,2])
             ax3.plot(actions_groundtruth[:,2])
-            ax3.set_ylim(-1.1,1.1)
+            ax3.set_ylim(-0.1,1.1)
             # ax3.scatter( np.arange(train_data['action'].shape[0]), train_data['action'][:,2] , c='r', s=1)
             
-            plt2tsb(fig2, writer, 'Action comparisons', niter)
+            plt2tsb(fig2, writer, 'Action comparisons' + self.date , niter)
 
         loss = self.onepass(batch, batch_idx, mode="validation")
         self.log("val_loss",loss)
+        plt.close('all')
         return loss
 
     def configure_optimizers(self):
@@ -297,7 +295,7 @@ class Diffusion(pl.LightningModule):
 
     # ---------------------- Sampling --------------------------------
     @torch.no_grad()
-    def p_reverseProcess_loop(self, x_cond, x_T = None):
+    def p_reverseProcess_loop(self, x_cond, x_0 , x_T = None):
         if x_T is None:
             x_t = torch.rand(1, 1, self.pred_horizon, self.prediction_dim, device=self.device)
         else:
@@ -315,9 +313,17 @@ class Diffusion(pl.LightningModule):
 
 
             # Inpaint: replace the first datapoint with the condition
-            x_t[:, : , 0, :] = x_cond[:, : , -1, :5] # inpaint the first datapoint (should be enough)
-            x_t[:, :, :, 2:] = torch.clip(x_t[:, :, :, 2:], min=-1.0, max=1.0) 
+            x_t[:, : , 0, :] = x_0[:, : , -1, :5] # inpaint the first datapoint (should be enough)
+            x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2], min=-1.0, max=1.0) # Enforce action limits (steering angle)
+            x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:], min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
 
+        return x_t
+
+    @torch.no_grad()
+    def apply_cond(x_t, x_cond):
+        x_t[:, :, 0, :] = x_cond[:, :, -1, :5]  # Inpaint the first datapoint (should be enough)
+        x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2], min=-1.0, max=1.0)  # Enforce action limits (steering angle)
+        x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:], min=0.0, max=1.0)  # Enforce action limits (acceleration and brake)
         return x_t
 
 

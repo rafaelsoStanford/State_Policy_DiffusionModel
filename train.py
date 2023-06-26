@@ -103,9 +103,6 @@ def main(args):
     train_dataloader = dataset.train_dataloader()
     valid_dataloader = dataset.val_dataloader()
 
-
-
-
     # # ===========model===========
     diffusion = Diffusion(
                     noise_steps= noise_steps,
