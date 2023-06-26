@@ -134,7 +134,7 @@ def main(args):
     trainer = pl.Trainer(accelerator='gpu', devices=[0,1], precision=("16-mixed" if AMP else 32), max_epochs=n_epochs, 
                          callbacks=[early_stop_callback, checkpoint_callback],
                          logger=tensorboard, profiler="simple", val_check_interval=0.25, 
-                         accumulate_grad_batches=1, gradient_clip_val=0.5 ) #, strategy='ddp_find_unused_parameters_true')
+                         accumulate_grad_batches=1, gradient_clip_val=0.5 ) 
 
     trainer.validate(model= diffusion, dataloaders=valid_dataloader)
     trainer.fit(model=diffusion, train_dataloaders=train_dataloader, val_dataloaders=valid_dataloader)
