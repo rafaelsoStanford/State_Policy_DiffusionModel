@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 from PIL import Image
 import io
+import datetime
 
 
 from models.Unet_FiLmLayer import *
@@ -32,6 +33,11 @@ def plt2tsb(figure, writer, fig_name, niter):
     # Add the image to TensorBoard
     writer.add_image(fig_name, image_tensor, niter)
 
+    # Add date and time to the title
+    current_datetime = datetime.datetime.now()
+    title_with_datetime = f"{fig_name} ({current_datetime})"
+    writer.add_text(fig_name, title_with_datetime, niter)
+
 def linear_beta_schedule(self, steps):
     """
     linear schedule, proposed in original ddpm paper
@@ -40,7 +46,8 @@ def linear_beta_schedule(self, steps):
     beta_start = scale * 0.0001
     beta_end = scale * 0.02
     beta = torch.linspace(beta_start, beta_end, steps, dtype=torch.float32, device=self.device)
-    return torch.cat([torch.tensor([0],device=self.device), beta])   # at t=0, we want beta=0.0, zero noise added
+    return beta
+    #return torch.cat([torch.tensor([0],device=self.device), beta])   # at t=0, we want beta=0.0, zero noise added
 
 
 def cosine_beta_schedule(self, timesteps, s=0.008, dtype=torch.float32):
@@ -84,9 +91,10 @@ class Diffusion(pl.LightningModule):
             self.model = UNet
 
         # Set noise schedule params
-        betas = self.NoiseScheduler(self, noise_steps)
+        betas =  self.NoiseScheduler(self, noise_steps)
         alphas = 1. - betas
         alphas_cumprod = torch.cumprod(alphas, dim=0)
+
 
         # Experimental: DDPS Scheduler
         noise_schedule = DDPMScheduler(
@@ -99,6 +107,7 @@ class Diffusion(pl.LightningModule):
             # our network predicts noise (instead of denoised action)
             prediction_type='epsilon'
             )
+
 
 
 
@@ -126,27 +135,27 @@ class Diffusion(pl.LightningModule):
         ### Define model which will be a simplifed 1D UNet
         self.vision_encoder = VisionEncoder() # Loads pretrained weights of Resnet18 with output dim 512 (also modified layers as Suggested by Song et al.)
         self.vision_encoder.device = self.device
-
-    
     
     # ==================== Training ====================
+
     def onepass(self, batch, batch_idx, mode="train"):
-        # =============== Preparing Observation / Prediction data ===================
+        # ---------------- Preparing Observation / Prediction data ----------------
         x_0 , obs_cond = self.prepare_pred_cond_vectors(batch)
         x_0 = x_0.unsqueeze(1)
         obs_cond = obs_cond.unsqueeze(1)
         B = x_0.shape[0]
 
-        # =============== Forward Process ===================
-        t = torch.randint(1, self.noise_steps+1, (B,), device=self.device).long() # Values from [1, 1000]
+        # ---------------- Forward Process ----------------
+        t = torch.randint(0, self.noise_steps, (B,), device=self.device).long() # Values from [0, 999]
         noise = torch.randn_like(x_0)
         x_noisy = self.q_forwardProcess(x_0, t, noise) # (B, 1 , pred_horizon, pred_dim)
-        #x_noisy  = torch.sqrt(self.alphas_cumprod[t])[:,None,None,None] * x_0 + torch.sqrt(1-self.alphas_cumprod[t])[:,None,None,None] * noise
 
         # Inpainting
         x_noisy[:, :, 0, :] = x_0[:, :, -1, :]
+        # Enforcing boundary conditions
+        x_noisy[:, :, :, 2:] = torch.clip(x_noisy[:, :, :, 2:], min=-1.0, max=1.0) 
 
-        # =============== Estimate noise / Single Backward process ===================
+        # ---------------- Estimate noise / Single Backward process ----------------
         # Estimate noise using noise_predictor
         if mode == "train":
             noise_estimated = self.noise_estimator(x_noisy, t, obs_cond)
@@ -154,19 +163,18 @@ class Diffusion(pl.LightningModule):
             with torch.no_grad():
                 noise_estimated = self.noise_estimator(x_noisy, t, obs_cond)
 
-        # ===============  Loss ===================
+        # ----------------  Loss ----------------
         loss = self.loss(noise, noise_estimated)
         return loss
     
-    def q_forwardProcess(self, x_start, t, noise): # q(x_t | x_{t-1})
+     # q(x_t | x_0)
+    def q_forwardProcess(self, x_start, t, noise):
         """
         x_start: (batch_size, pred_horizon, pred_dim)
         t: timestep (batch_size, 1)
 
         returns: x_t (batch_size, pred_horizon, pred_dim)
         """
-        
-        #x_t = self.sqrt_alphas_cumprod[t][:, None, None]  * x_start + self.sqrt_one_minus_alphas_cumprod[t][:, None, None] * noise
         x_t = torch.sqrt(self.alphas_cumprod[t])[:,None,None,None] * x_start + torch.sqrt(1-self.alphas_cumprod[t])[:,None,None,None] * noise
         return x_t
 
@@ -176,25 +184,23 @@ class Diffusion(pl.LightningModule):
         assert(not torch.isnan(batch['position'][:,: self.obs_horizon ,:]).any())
         assert(not torch.isnan(batch['action'][:,self.obs_horizon : ,:]).any())
 
-        # =============== Preparing Observation data ===================
-
+        # ---------------- Preparing Observation data ----------------
         normalized_img = batch['image'][:,:self.obs_horizon ,:] 
-        normalized_pos = batch['position'][:,: self.obs_horizon ,:]
-        normalized_act = batch['action'][:,: self.obs_horizon ,:]
+        normalized_pos = batch['position'][:,:self.obs_horizon ,:]
+        normalized_act = batch['action'][:,:self.obs_horizon ,:]
+        normalized_vel = batch['velocity'][:,:self.obs_horizon ,:]
 
-        # =============== Encoding Image data ===================
+        # ---------------- Encoding Image data ----------------
         encoded_img = self.vision_encoder(normalized_img.flatten(end_dim=1)) # (B, 512)
         image_features = encoded_img.reshape(*normalized_img.shape[:2],-1) # (B, t_0:t_obs , 512)
 
-        # =============== Conditional vector ===================
+        # ---------------- Conditional vector ----------------
         # Concatenate position and action data and image features
-        obs_cond = torch.cat([normalized_pos, normalized_act, image_features], dim=-1) # (B, t_0:t_obs, 512 + 3 + 2)
+        obs_cond = torch.cat([normalized_pos, normalized_act, normalized_vel , image_features], dim=-1) # (B, t_0:t_obs, 512 + 3 + 2)
 
-        # =============== Preparing Prediction data (acts as ground truth) ===================
+        # ---------------- Preparing Prediction data (acts as ground truth) ----------------
         x_0_pos = batch['position'][:,self.obs_horizon: ,:] # (B, t_obs:t_pred , 2)
-        x_0_act = batch['action'][:,self.obs_horizon: ,:] # (B, t_obs:t_pred, 3)
-        
-        # Full ground truth vector
+        x_0_act = batch['action'][:, self.obs_horizon: ,:] # (B, t_obs:t_pred, 3)
         x_0 = torch.cat([x_0_pos, x_0_act], dim=-1) # (B, t_obs:t_pred, 5)
 
         return x_0 , obs_cond
@@ -207,6 +213,7 @@ class Diffusion(pl.LightningModule):
         return loss
     
 # ==================== Validation ====================    
+
     def validation_step(self, batch, batch_idx):
         if batch_idx == 0:
             x_0 , obs_cond = self.prepare_pred_cond_vectors(batch)
@@ -216,26 +223,25 @@ class Diffusion(pl.LightningModule):
             # # Idea: Using the observations we predict the future action / position steps
             x_0_predicted = self.p_reverseProcess_loop(x_cond = obs_cond) # Only one batch is used to be visualized
 
-            # =============== Visualization / Prepare Data ===================
+            # ---------------- Visualization / Prepare Data ----------------
             # Predictions
-            positions_predicted = x_0_predicted.squeeze().detach().cpu().numpy() #(20 , 2)
-            #actions_predicted = x_0_predicted.squeeze().detach().cpu().numpy() #(20 , 3)
+            positions_predicted = x_0_predicted.squeeze()[:, :2].detach().cpu().numpy() #(20 , 2)
+            actions_predicted = x_0_predicted.squeeze()[:, 2:].detach().cpu().numpy() #(20 , 3)
 
             # Observations ie Past
             position_observation = obs_cond.squeeze()[:, :2].detach().cpu().numpy() 
-            #actions_observation = normalized_act[0, ...].detach().cpu().numpy()
+            actions_observation = obs_cond.squeeze()[:, 2:].detach().cpu().numpy()
 
             positions_groundtruth = x_0.squeeze()[:, :2].detach().cpu().numpy() #(20 , 2)
-            #actions_groundtruth = x_0[0,:].squeeze().detach().cpu().numpy() #(20 , 3)
+            actions_groundtruth = x_0.squeeze()[:, 2:].squeeze().detach().cpu().numpy() #(20 , 3)
 
-            # Plot data
+            # ---------------- Plotting ----------------
             writer = self.logger.experiment
             niter  = self.global_step
 
-            # ==================== 2D Position Plot ====================
+            # ---------------- 2D Position Plot ----------------
             fig = plt.figure()
             fig.clf()
-
             # Create a colormap for fading colors based on the number of timesteps
             cmap = get_cmap('viridis', self.pred_horizon)
             # Create an array of indices from 0 to timesteps-1
@@ -255,24 +261,27 @@ class Diffusion(pl.LightningModule):
             # Plot to tensorboard
             plt2tsb(fig, writer, 'Predicted_path', niter)
 
-
+            # ---------------- Action Plotting ----------------
             # Visualize the action data
-            # fig2, (ax1, ax2, ax3) = plt.subplots(1, 3)
-            # ax1.plot(action_prediction[:,0])
-            # ax1.plot(action_predicted[:,0])
-            # # ax1.scatter( np.arange(train_data['action'].shape[0]), train_data['action'][:,0] , c='r', s=1)
-            # ax2.plot(action_prediction[:,1])
-            # ax2.plot(action_predicted[:,1])
-            # # ax2.scatter( np.arange(train_data['action'].shape[0]), train_data['action'][:,1] , c='r', s=1)
-            # ax3.plot(action_prediction[:,2])
-            # ax3.plot(action_predicted[:,2])
-            # # ax3.scatter( np.arange(train_data['action'].shape[0]), train_data['action'][:,2] , c='r', s=1)
-            # plt2tsb(fig2, writer, 'Action comparisons', niter)
+            fig2, (ax1, ax2, ax3) = plt.subplots(1, 3)
+            ax1.plot(actions_predicted[:,0])
+            ax1.plot(actions_groundtruth[:,0])
+            ax1.set_ylim(-1.1,1.1)
+            # ax1.scatter( np.arange(train_data['action'].shape[0]), train_data['action'][:,0] , c='r', s=1)
+            ax2.plot(actions_predicted[:,1])
+            ax2.plot(actions_groundtruth[:,1])
+            ax2.set_ylim(-1.1,1.1)
+            # ax2.scatter( np.arange(train_data['action'].shape[0]), train_data['action'][:,1] , c='r', s=1)
+            ax3.plot(actions_predicted[:,2])
+            ax3.plot(actions_groundtruth[:,2])
+            ax3.set_ylim(-1.1,1.1)
+            # ax3.scatter( np.arange(train_data['action'].shape[0]), train_data['action'][:,2] , c='r', s=1)
+            
+            plt2tsb(fig2, writer, 'Action comparisons', niter)
 
         loss = self.onepass(batch, batch_idx, mode="validation")
         self.log("val_loss",loss)
         return loss
-
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -294,54 +303,21 @@ class Diffusion(pl.LightningModule):
         else:
             x_t = x_T
         
-        for t in range(self.noise_steps ,0,-1):
+        for t in reversed(range(0,self.noise_steps)): # t ranges from 999 to 0
+ 
             with torch.no_grad():                
+                if t == 0:
+                    z = torch.zeros_like(x_t)
+                else:
+                    z = torch.randn_like(x_t)
                 est_noise = self.noise_estimator(x_t, torch.tensor([t], device=self.device), x_cond)
-            if t > 1:
-                z = torch.randn_like(x_t)
                 x_t = 1/torch.sqrt(self.alphas[t])* (x_t-(1-self.alphas[t])/torch.sqrt(1-self.alphas_cumprod[t])*est_noise) +  torch.sqrt(self.betas[t])*z
 
-            else:
-                x_t = 1/torch.sqrt(self.alphas[t])* (x_t-(1-self.alphas[t])/torch.sqrt(1-self.alphas_cumprod[t])*est_noise)
 
             # Inpaint: replace the first datapoint with the condition
             x_t[:, : , 0, :] = x_cond[:, : , -1, :5] # inpaint the first datapoint (should be enough)
+            x_t[:, :, :, 2:] = torch.clip(x_t[:, :, :, 2:], min=-1.0, max=1.0) 
 
         return x_t
 
 
-# def test_forward_process():
-
-#     from torchvision.transforms import Compose, ToTensor, Lambda, ToPILImage, CenterCrop, Resize
-#     from PIL import Image
-
-#     diffusion = Diffusion()
-    
-#     image_size = 128
-#     transform = Compose([
-#                 Resize(image_size),
-#                 CenterCrop(image_size),
-#                 ToTensor(), # turn into torch Tensor of shape CHW, divide by 255
-#                 Lambda(lambda t: (t * 2) - 1),
-
-#     ])
-
-#     reverse_transform = Compose([
-#                         Lambda(lambda t: (t + 1) / 2),
-#                         Lambda(lambda t: t.permute(1, 2, 0)), # CHW to HWC
-#                         Lambda(lambda t: t * 255.),
-#                         Lambda(lambda t: t.numpy().astype(np.uint8)),
-#                         ToPILImage(),
-#                         ])
-
-#     # Test forward pass
-#     img = Image.open("./data/tests/test.jpg") # PIL image of shape HWC
-#     t = torch.tensor(0)
-#     x_start = transform(img).unsqueeze(0) #(1,3,128,128)
-#     noise = torch.randn_like(x_start)
-#     x_t = diffusion.q_forwardProcess(x_start, t ,noise)
-#     noisy_img = reverse_transform(x_t.squeeze(0)) 
-#     noisy_img.show()
-
-# if __name__ == "__main__":
-#     test_forward_process()

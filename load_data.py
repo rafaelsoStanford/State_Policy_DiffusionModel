@@ -2,6 +2,25 @@ import numpy as np
 import pickle
 import zarr
 import torch
+import matplotlib.pyplot as plt
+
+def visualize_batch(batch):
+    print("Visualizing Batch and Data structure")
+    print(" [ B, t_sequence, dims ]")
+    for key, value in batch.items():
+        print()
+        print(f'--> Key: {key}')
+        print(f'Shape: ({len(value)}, {len(value[0])})')
+        print(value.shape)
+        print("Min: ", value.min())
+        print("Max: ", value.max())
+        print()
+
+    for traj in range(batch['position'].shape[0]):
+        plt.plot(batch['position'][traj, :, 0], batch['position'][traj, :, 1])
+        plt.scatter(0, 0, c='r')
+        plt.waitforbuttonpress()
+        plt.close()
 
 # normalize data
 def get_data_stats(data):

@@ -1,12 +1,6 @@
-import matplotlib.pyplot as plt
-import numpy as np
-import pickle
-import zarr
 import argparse
 import os
 
-
-import torch
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, random_split
 from pytorch_lightning import loggers as pl_loggers
@@ -16,10 +10,15 @@ from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAve
 from models.diffusion import *
 from load_data import *
 
+# Only for Debugging
+VISUALIZE_BATCH = False
+VISUALIZE_MODEL = False
+
+
 # =========== parser function ===========
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Training script')
-    parser.add_argument('--n_epochs', type=int, default=1000, help='Number of epochs')
+    parser.add_argument('--n_epochs', type=int, default=500, help='Number of epochs')
     parser.add_argument('--amp', action='store_true', help='Enable Automatic Mixed Precision (AMP)')
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
@@ -32,6 +31,9 @@ def parse_arguments():
     parser.add_argument('--cond_dim', type=int, default=517, help='Dimension of diffusion input state')
     parser.add_argument('--output_dim', type=int, default=5, help='Dimension of diffusion output state')
     parser.add_argument('--model', type=str, default='default', help='String for choosing model architecture')
+
+    parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
+    parser.add_argument('--dataset', type=str, default='multipleDrivingBehaviours_testing_20eps_normalized.zarr.zip', help='zarr.zip dataset filename')
     
     return parser.parse_args()
 
@@ -51,6 +53,7 @@ class CarRacingDataModule(pl.LightningDataModule):
         self.data_val = None
 
     def setup(self, name: str = None):
+        # ----- CarRacingDataset is a Dataloader file, takes care of normalization and such-----
         self.data_full = CarRacingDataset(  dataset_path= os.path.join(self.data_dir, name),
                                             pred_horizon=self.T_pred,
                                             obs_horizon=self.T_obs,
@@ -58,10 +61,10 @@ class CarRacingDataModule(pl.LightningDataModule):
         self.data_train, self.data_val = random_split(self.data_full, [int(len(self.data_full)*0.8), len(self.data_full) - int(len(self.data_full)*0.8)])
 
     def train_dataloader(self):
-        return DataLoader(self.data_train, batch_size=self.batch_size, shuffle=True, num_workers=2)
+        return DataLoader(self.data_train, batch_size=self.batch_size, shuffle=True, num_workers=4)
 
     def val_dataloader(self):
-        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=False, num_workers=2)
+        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=False, num_workers=4)
 
 
 ############################
@@ -84,37 +87,23 @@ def main(args):
     action_horizon = args.action_horizon
     cond_dim = args.cond_dim
     output_dim = args.output_dim
-    
+
+    # Dataset dir and filename
+    dataset_dir = args.dataset_dir
+    dataset_name = args.dataset
+
     # model architecture
     model = args.model
     
-
-    # ===========data===========
+    # =========== Loading Data ===========
     # Load Dataset using Pytorch Lightning DataModule
-    dataset = CarRacingDataModule("./data" , batch_size, obs_horizon, pred_horizon ,action_horizon)
+    dataset = CarRacingDataModule(dataset_dir , batch_size, obs_horizon, pred_horizon ,action_horizon)
     
-    dataset.setup(name='multipleDrivingBehaviours_testing_20eps_normalized.zarr.zip')
+    dataset.setup(name=dataset_name)
     train_dataloader = dataset.train_dataloader()
     valid_dataloader = dataset.val_dataloader()
 
-    batch = next(iter(train_dataloader))
 
-    print("Visualizing Batch and Data structure")
-    print(" [ B, t_sequence, dims ]")
-    for key, value in batch.items():
-        print()
-        print(f'--> Key: {key}')
-        print(f'Shape: ({len(value)}, {len(value[0])})')
-        print(value.shape)
-        print("Min: ", value.min())
-        print("Max: ", value.max())
-        print()
-    
-    # for traj in range(batch['position'].shape[0]):
-    #     plt.plot(batch['position'][traj,:,0], batch['position'][traj,:,1])
-    #     plt.scatter(0,0, c='r')
-    #     plt.waitforbuttonpress()
-    #     plt.close()
 
 
     # # ===========model===========
@@ -128,6 +117,12 @@ def main(args):
                     learning_rate=lr,
                     )
 
+    if VISUALIZE_BATCH:
+        visualize_batch(next(iter(train_dataloader)))
+    # Print model summary and architecture
+    if VISUALIZE_MODEL:
+        print(diffusion.noise_estimator)
+
     # ===========trainer===========
     # -----PL configs-----
     tensorboard = pl_loggers.TensorBoardLogger(save_dir="tb_logs/",name='',flush_secs=1)
@@ -138,7 +133,7 @@ def main(args):
                                           every_n_epochs=5,               # Save every epoch
                                           save_on_train_epoch_end=True,
                                           verbose=True)
-    # train model
+    # -----train model-----
     trainer = pl.Trainer(accelerator='gpu', devices=[0,1], precision=("16-mixed" if AMP else 32), max_epochs=n_epochs, 
                          callbacks=[early_stop_callback, checkpoint_callback],
                          logger=tensorboard, profiler="simple", val_check_interval=0.25, 
