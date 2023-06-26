@@ -278,7 +278,6 @@ class Diffusion(pl.LightningModule):
 
         loss = self.onepass(batch, batch_idx, mode="validation")
         self.log("val_loss",loss)
-        plt.close('all')
         return loss
 
     def configure_optimizers(self):

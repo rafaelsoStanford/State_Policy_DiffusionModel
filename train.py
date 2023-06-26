@@ -139,7 +139,6 @@ def main(args):
     trainer.validate(model= diffusion, dataloaders=valid_dataloader)
     trainer.fit(model=diffusion, train_dataloaders=train_dataloader, val_dataloaders=valid_dataloader)
 
-
 if __name__ == "__main__":
     args = parse_arguments()
     main(args)
