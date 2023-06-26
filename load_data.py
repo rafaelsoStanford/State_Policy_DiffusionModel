@@ -146,7 +146,7 @@ class CarRacingDataset(torch.utils.data.Dataset):
         #     normalized_train_data[key] = normalize_data(data, stats[key])
         # self.stats = stats
 
-        self.normalized_train_data['image'] = train_image_data[:,: , :80, :80] # Assumed to be already normalized, cropped to 80x80 removing the black border
+        self.normalized_train_data['image'] = train_image_data # [:,: , :80, :80] # Assumed to be already normalized, cropped to 80x80 removing the black border
         self.normalized_train_data['action'] = train_data['action'] # All action space values are constrained to [-1,1]
         self.normalized_train_data['position'] = train_data['position'] # normalized_train_data ['position'] 
         self.indices = indices

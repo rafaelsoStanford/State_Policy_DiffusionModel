@@ -28,15 +28,14 @@ def parse_arguments():
     parser.add_argument('--action_horizon', type=int, default=1, help='Action horizon')
     parser.add_argument('--noise_steps', type=int, default=1000, help='Denoising steps')
     
-    parser.add_argument('--cond_dim', type=int, default=517, help='Dimension of diffusion input state')
+    parser.add_argument('--cond_dim', type=int, default=128+2+3, help='Dimension of diffusion input state')
     parser.add_argument('--output_dim', type=int, default=5, help='Dimension of diffusion output state')
     parser.add_argument('--model', type=str, default='default', help='String for choosing model architecture')
 
     parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
-    parser.add_argument('--dataset', type=str, default='multipleDrivingBehaviours_testing_20eps_normalized.zarr.zip', help='zarr.zip dataset filename')
+    parser.add_argument('--dataset', type=str, default='ThreeBehaviours_20Eps.zarr.zip', help='zarr.zip dataset filename')
     
     return parser.parse_args()
-
 
 # =========== data loader module ===========
 # data module
@@ -112,7 +111,7 @@ def main(args):
                     prediction_dim= output_dim,
                     model=model,
                     learning_rate=lr,
-                    )
+    )
 
     if VISUALIZE_BATCH:
         visualize_batch(next(iter(train_dataloader)))
@@ -134,7 +133,7 @@ def main(args):
     trainer = pl.Trainer(accelerator='gpu', devices=[0,1], precision=("16-mixed" if AMP else 32), max_epochs=n_epochs, 
                          callbacks=[early_stop_callback, checkpoint_callback],
                          logger=tensorboard, profiler="simple", val_check_interval=0.25, 
-                         accumulate_grad_batches=1, gradient_clip_val=0.5 ) 
+                         accumulate_grad_batches=1, gradient_clip_val=0.5) #, strategy='ddp_find_unused_parameters_true') 
 
     trainer.validate(model= diffusion, dataloaders=valid_dataloader)
     trainer.fit(model=diffusion, train_dataloaders=train_dataloader, val_dataloaders=valid_dataloader)
