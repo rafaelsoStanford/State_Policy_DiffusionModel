@@ -26,6 +26,7 @@ def parse_arguments():
     parser.add_argument('--obs_horizon', type=int, default=40, help='Observation horizon')
     parser.add_argument('--pred_horizon', type=int, default=40, help='Prediction horizon')
     parser.add_argument('--action_horizon', type=int, default=1, help='Action horizon')
+    parser.add_argument('--inpaint_horizon', type=int, default=5, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
     parser.add_argument('--noise_steps', type=int, default=1000, help='Denoising steps')
     
     parser.add_argument('--cond_dim', type=int, default=128+2+3, help='Dimension of diffusion input state')
@@ -83,9 +84,11 @@ def main(args):
     noise_steps = args.noise_steps
     obs_horizon = args.obs_horizon
     pred_horizon = args.pred_horizon
+    inpaint_horizon = args.inpaint_horizon
     action_horizon = args.action_horizon
     cond_dim = args.cond_dim
     output_dim = args.output_dim
+
 
     # Dataset dir and filename
     dataset_dir = args.dataset_dir
@@ -111,6 +114,7 @@ def main(args):
                     prediction_dim= output_dim,
                     model=model,
                     learning_rate=lr,
+                    inpaint_horizon=inpaint_horizon,
     )
 
     if VISUALIZE_BATCH:
