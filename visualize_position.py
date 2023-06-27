@@ -81,7 +81,7 @@ def get_data_stats(data):
     return stats
 
 
-dataset_path = "./data/twoBehaviours_testing_5eps_normalized.zarr.zip"
+dataset_path = "./data/ThreeBehaviours_20Eps.zarr.zip"
 # read from zarr dataset
 dataset_root = zarr.open(dataset_path, 'r')
 
@@ -155,7 +155,9 @@ indices = create_sample_indices(
             pad_after= 0)
 
 np.random.shuffle(indices) # shuffle indices
-for i in range(10):            
+stat_hist_min = []
+stat_hist_max = []
+for i in range(100):            
     # get the start/end indices for this datapoint
     buffer_start_idx, buffer_end_idx, \
         sample_start_idx, sample_end_idx = indices[i]
@@ -170,7 +172,13 @@ for i in range(10):
             )
 
     # ========== normalize sample ============
+
     sample_stat = get_data_stats(sample)
+    min = sample_stat['min']
+    max = sample_stat['max']
+    stat_hist_min.append(min)
+    stat_hist_max.append(max)
+
     sample_normalized = normalize_data(sample, sample_stat)
     translation_vec = sample_normalized[0]
     sample_centered = sample_normalized - translation_vec
@@ -182,9 +190,11 @@ for i in range(10):
     # Point at origin
     ax3.scatter(0,0, c='r')
     
-    plt.waitforbuttonpress()
+    #plt.waitforbuttonpress()
     plt.close()
 
+print(np.mean(stat_hist_max))
+print(np.mean(stat_hist_min))
 # ========== Create Sample Batches ============
 # batch_size = 10
 # # create batches
@@ -218,3 +228,38 @@ for i in range(10):
 #     plt.waitforbuttonpress()
 #     plt.close()
 
+for i in range(2):            
+    # get the start/end indices for this datapoint
+    buffer_start_idx, buffer_end_idx, \
+        sample_start_idx, sample_end_idx = indices[i]
+
+    sample = sample_sequence(
+                train_data= train_data['position'],
+                sequence_length=    sequence_length,
+                buffer_start_idx=   buffer_start_idx,
+                buffer_end_idx=     buffer_end_idx,
+                sample_start_idx=   sample_start_idx,
+                sample_end_idx=     sample_end_idx
+            )
+
+    # ========== normalize sample ============
+
+    sample_stat = {
+        'min': -17.8,
+        'max': 39.4
+    }
+
+
+    sample_normalized = normalize_data(sample, sample_stat)
+    translation_vec = sample_normalized[0]
+    sample_centered = sample_normalized - translation_vec
+
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+    ax1.plot(sample[:,0], sample[:,1])
+    ax2.plot(sample_normalized[:,0], sample_normalized[:,1])
+    ax3.plot(sample_centered[:,0], sample_centered[:,1])
+    # Point at origin
+    ax3.scatter(0,0, c='r')
+    
+    plt.waitforbuttonpress()
+    plt.close()

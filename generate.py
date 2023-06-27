@@ -10,9 +10,10 @@ from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAve
 from models.diffusion import *
 from load_data import *
 
-# Only for Debugging
-VISUALIZE_BATCH = False
-VISUALIZE_MODEL = False
+import zarr
+import numpy as np
+import torch
+import matplotlib.pyplot as plt
 
 # =========== parser function ===========
 def parse_arguments():
@@ -95,52 +96,53 @@ def main(args):
 
     # model architecture
     model = args.model
-    
-    # =========== Loading Data ===========
-    # Load Dataset using Pytorch Lightning DataModule
-    dataset = CarRacingDataModule(dataset_dir , batch_size, obs_horizon, pred_horizon ,action_horizon)
-    
-    dataset.setup(name=dataset_name)
-    train_dataloader = dataset.train_dataloader()
-    valid_dataloader = dataset.val_dataloader()
 
-    # # ===========model===========
-    diffusion = Diffusion(
-                    noise_steps= noise_steps,
-                    obs_horizon=obs_horizon,
-                    pred_horizon= pred_horizon,
-                    observation_dim=cond_dim,
-                    prediction_dim= output_dim,
-                    model=model,
-                    learning_rate=lr,
-                    inpaint_horizon=inpaint_horizon,
+    model = Diffusion.load_from_checkpoint(
+        checkpoint_path="./tb_logs/version_389/checkpoints/epoch=24.ckpt",
     )
+    model.eval()
 
-    if VISUALIZE_BATCH:
-        visualize_batch(next(iter(train_dataloader)))
-    # Print model summary and architecture
-    if VISUALIZE_MODEL:
-        print(diffusion.noise_estimator)
 
-    # ===========trainer===========
-    # -----PL configs-----
-    tensorboard = pl_loggers.TensorBoardLogger(save_dir="tb_logs/",name='',flush_secs=1)
 
-    early_stop_callback = EarlyStopping(monitor='lr', stopping_threshold=2e-6, patience=n_epochs)   
-    checkpoint_callback = ModelCheckpoint(filename="{epoch}",     # Checkpoint filename format
-                                          save_top_k=-1,          # Save all checkpoints
-                                          every_n_epochs=5,               # Save every epoch
-                                          save_on_train_epoch_end=True,
-                                          verbose=True)
-    # -----train model-----
-    trainer = pl.Trainer(accelerator='gpu', devices=[0,1], precision=("16-mixed" if AMP else 32), max_epochs=n_epochs, 
-                         callbacks=[early_stop_callback, checkpoint_callback],
-                         logger=tensorboard, profiler="simple", val_check_interval=0.25, 
-                         accumulate_grad_batches=1, gradient_clip_val=0.5) #, strategy='ddp_find_unused_parameters_true') 
+    dataset = CarRacingDataModule (dataset_dir , batch_size, obs_horizon, pred_horizon ,action_horizon)
+    dataset.setup()
+    val_dataloader = dataset.val_dataloader()
 
-    trainer.validate(model= diffusion, dataloaders=valid_dataloader)
-    trainer.fit(model=diffusion, train_dataloaders=train_dataloader, val_dataloaders=valid_dataloader)
 
-if __name__ == "__main__":
-    args = parse_arguments()
-    main(args)
+
+
+    # Get batch random images from the validation set
+    batch = next(iter(val_dataloader))
+    batch = batch.to(model.device)
+
+    with torch.no_grad():
+        embeddings = encoder(batch)
+        print("⚡" * 20, "\nPredictions (batch image embeddings):\n", embeddings.shape, "\n", "⚡" * 20)
+        reconstructions = decoder(embeddings)
+
+        # Reshape the images to (batch_size, height, width, channels)
+        images_orig = batch.permute(0, 2, 3, 1).cpu().detach().numpy()
+        images = reconstructions.permute(0, 2, 3, 1).cpu().detach().numpy()
+
+        # Create a figure and axis
+        #fig, ax = plt.subplots(1, 1, figsize=(16, 3))
+
+        # Set axis labels and title
+        
+        # Display first image
+        fig, axs = plt.subplots(1, 2)
+
+        fig = plt.figure(figsize=(20, 20))
+        columns = 8
+        rows = 2
+        for i in range(1, columns*1 +1):
+            img = images_orig[i, :]
+            fig.add_subplot(1, columns, i)
+            plt.imshow(img)
+
+        for i in range(1, columns +1):
+            img = images[i, :]
+            fig.add_subplot(2, columns, i)
+            plt.imshow(img)
+        # Show the plot
+        plt.show()

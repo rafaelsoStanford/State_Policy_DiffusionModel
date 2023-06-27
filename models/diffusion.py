@@ -123,7 +123,7 @@ class Diffusion(pl.LightningModule):
             vision = autoencoder.load_from_checkpoint(checkpoint_path="./tb_logs_autoencoder/version_23/checkpoints/epoch=25.ckpt")
             self.vision_encoder = vision.encoder
         self.vision_encoder.device = self.device
-        self.vision_encoder.eval()
+        self.vision_encoder.eval() # 128 entries
         
 
     # ==================== Training ====================
@@ -139,7 +139,7 @@ class Diffusion(pl.LightningModule):
         noise = torch.randn_like(x_0)
         x_noisy = self.q_forwardProcess(x_0, t, noise) # (B, 1 , pred_horizon, pred_dim)
 
-                # Inpaint: replace the first datapoint with the condition
+        # Inpaint: replace the first datapoint with the condition
         x_noisy[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :].clone() # inpaint the first datapoint (should be enough)
         x_noisy[:, :, :, 2] = torch.clip(x_noisy[:, :, :, 2].clone(), min=-1.0, max=1.0) # Enforce action limits (steering angle)
         x_noisy[:, :, :, 3:] = torch.clip(x_noisy[:, :, :, 3:].clone(), min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
@@ -153,7 +153,7 @@ class Diffusion(pl.LightningModule):
                 noise_estimated = self.noise_estimator(x_noisy, t, obs_cond)
 
         # ----------------  Loss ----------------
-        loss = self.loss(noise, noise_estimated)
+        loss = self.loss(noise, noise_estimated) #MSE Loss
         return loss
     
      # q(x_t | x_0)
