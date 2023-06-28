@@ -1,5 +1,3 @@
-import argparse
-import os
 
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, random_split
@@ -10,33 +8,13 @@ from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAve
 from models.diffusion import *
 from load_data import *
 
-import zarr
-import numpy as np
-import torch
-import matplotlib.pyplot as plt
+import os
+import yaml
 
-# =========== parser function ===========
-def parse_arguments():
-    parser = argparse.ArgumentParser(description='Training script')
-    parser.add_argument('--n_epochs', type=int, default=500, help='Number of epochs')
-    parser.add_argument('--amp', action='store_true', help='Enable Automatic Mixed Precision (AMP)')
-    parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
-    parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
-
-    parser.add_argument('--obs_horizon', type=int, default=40, help='Observation horizon')
-    parser.add_argument('--pred_horizon', type=int, default=40, help='Prediction horizon')
-    parser.add_argument('--action_horizon', type=int, default=1, help='Action horizon')
-    parser.add_argument('--inpaint_horizon', type=int, default=5, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
-    parser.add_argument('--noise_steps', type=int, default=1000, help='Denoising steps')
-    
-    parser.add_argument('--cond_dim', type=int, default=128+2+3, help='Dimension of diffusion input state')
-    parser.add_argument('--output_dim', type=int, default=5, help='Dimension of diffusion output state')
-    parser.add_argument('--model', type=str, default='default', help='String for choosing model architecture')
-
-    parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
-    parser.add_argument('--dataset', type=str, default='ThreeBehaviours_20Eps.zarr.zip', help='zarr.zip dataset filename')
-    
-    return parser.parse_args()
+def fetch_hyperparams_from_yaml(file_path):
+    with open(file_path, 'r') as file:
+        hyperparams = yaml.safe_load(file)
+    return hyperparams
 
 # =========== data loader module ===========
 # data module
@@ -71,78 +49,38 @@ class CarRacingDataModule(pl.LightningDataModule):
 #========== MAIN ===========
 ############################
 
-def main(args):
+def main():
+    # Some params, dont know where to put them
+    AMP = True
+    n_epochs = 1
+    batch_size = 16
+
+    # =========== Load Model ===========
+    path_hyperparams = './tb_logs/version_416/hparams.yaml'
+    model_params = fetch_hyperparams_from_yaml(path_hyperparams)
+    model = Diffusion.load_from_checkpoint(
+        './tb_logs/version_416/checkpoints/epoch=24.ckpt',
+        hparams_file='./tb_logs/version_416/hparams.yaml'
+    )
+    model.eval() 
 
     # ===========Parameters===========
-    # training parameters
-    n_epochs = args.n_epochs
-    AMP = args.amp
-    batch_size = args.batch_size
-    lr = args.lr
+    noise_steps = model_params['noise_steps']
+    obs_horizon = model_params['obs_horizon']
+    pred_horizon = model_params['pred_horizon']
 
-    # diffusion parameters
-    noise_steps = args.noise_steps
-    obs_horizon = args.obs_horizon
-    pred_horizon = args.pred_horizon
-    inpaint_horizon = args.inpaint_horizon
-    action_horizon = args.action_horizon
-    cond_dim = args.cond_dim
-    output_dim = args.output_dim
-
-
+    # =========== Dataloader ===========
     # Dataset dir and filename
-    dataset_dir = args.dataset_dir
-    dataset_name = args.dataset
+    dataset_dir = './data'
+    dataset = CarRacingDataModule(dataset_dir , batch_size, obs_horizon, pred_horizon )
+    dataset.setup( name='ThreeBehaviours_20Eps.zarr.zip' )
+    test_dataloaders = dataset.val_dataloader()
 
-    # model architecture
-    model = args.model
+    # =========== Pytorch Lightning Trainer  ===========
 
-    model = Diffusion.load_from_checkpoint(
-        checkpoint_path="./tb_logs/version_389/checkpoints/epoch=24.ckpt",
-    )
-    model.eval()
+    trainer = pl.Trainer(accelerator='gpu', devices=[0,1], precision=("16-mixed" if AMP else 32), max_epochs=n_epochs)
+    trainer.test(model, dataloaders=test_dataloaders)
 
-
-
-    dataset = CarRacingDataModule (dataset_dir , batch_size, obs_horizon, pred_horizon ,action_horizon)
-    dataset.setup()
-    val_dataloader = dataset.val_dataloader()
-
-
-
-
-    # Get batch random images from the validation set
-    batch = next(iter(val_dataloader))
-    batch = batch.to(model.device)
-
-    with torch.no_grad():
-        embeddings = encoder(batch)
-        print("⚡" * 20, "\nPredictions (batch image embeddings):\n", embeddings.shape, "\n", "⚡" * 20)
-        reconstructions = decoder(embeddings)
-
-        # Reshape the images to (batch_size, height, width, channels)
-        images_orig = batch.permute(0, 2, 3, 1).cpu().detach().numpy()
-        images = reconstructions.permute(0, 2, 3, 1).cpu().detach().numpy()
-
-        # Create a figure and axis
-        #fig, ax = plt.subplots(1, 1, figsize=(16, 3))
-
-        # Set axis labels and title
-        
-        # Display first image
-        fig, axs = plt.subplots(1, 2)
-
-        fig = plt.figure(figsize=(20, 20))
-        columns = 8
-        rows = 2
-        for i in range(1, columns*1 +1):
-            img = images_orig[i, :]
-            fig.add_subplot(1, columns, i)
-            plt.imshow(img)
-
-        for i in range(1, columns +1):
-            img = images[i, :]
-            fig.add_subplot(2, columns, i)
-            plt.imshow(img)
-        # Show the plot
-        plt.show()
+if __name__ == "__main__":
+    main()
+    

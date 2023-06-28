@@ -129,7 +129,7 @@ def main(args):
     early_stop_callback = EarlyStopping(monitor='lr', stopping_threshold=2e-6, patience=n_epochs)   
     checkpoint_callback = ModelCheckpoint(filename="{epoch}",     # Checkpoint filename format
                                           save_top_k=-1,          # Save all checkpoints
-                                          every_n_epochs=5,               # Save every epoch
+                                          every_n_epochs=1,               # Save every epoch
                                           save_on_train_epoch_end=True,
                                           verbose=True)
     # -----train model-----
