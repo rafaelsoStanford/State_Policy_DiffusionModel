@@ -1,41 +1,92 @@
 #!/bin/bash
 
-# Set the desired parameter values
-n_epochs=500
-amp=1
+# Set constant values
+n_epochs=50
+
 batch_size=16
+lr=1e-4
+obs_horizon=20
+pred_horizon=40
+action_horizon=1
+inpaint_horizon=5
+noise_steps=1000
+cond_dim=133
+output_dim=5
+model="default"
+dataset_dir="./data"
+dataset="ThreeBehaviours_20Eps.zarr.zip"
+
+# Run the Python script
+python train.py \
+    --n_epochs $n_epochs \
+
+    --batch_size $batch_size \
+    --lr $lr \
+    --obs_horizon $obs_horizon \
+    --pred_horizon $pred_horizon \
+    --action_horizon $action_horizon \
+    --inpaint_horizon $inpaint_horizon \
+    --noise_steps $noise_steps \
+    --cond_dim $cond_dim \
+    --output_dim $output_dim \
+    --model $model \
+    --dataset_dir $dataset_dir \
+    --dataset $dataset
+
+model="UNet_Film"
+
+python train.py \
+    --n_epochs $n_epochs \
+
+    --batch_size $batch_size \
+    --lr $lr \
+    --obs_horizon $obs_horizon \
+    --pred_horizon $pred_horizon \
+    --action_horizon $action_horizon \
+    --inpaint_horizon $inpaint_horizon \
+    --noise_steps $noise_steps \
+    --cond_dim $cond_dim \
+    --output_dim $output_dim \
+    --model $model \
+    --dataset_dir $dataset_dir \
+    --dataset $dataset
+
 obs_horizon=40
 pred_horizon=40
 action_horizon=1
-cond_dim=517
-output_dim=5
-model="UNet"
-dataset="ThreeBehaviours_20Eps.zarr.zip"
+inpaint_horizon=5
 
-# Run the Python script with the specified arguments
 python train.py \
     --n_epochs $n_epochs \
-    --amp \
+
     --batch_size $batch_size \
+    --lr $lr \
     --obs_horizon $obs_horizon \
     --pred_horizon $pred_horizon \
     --action_horizon $action_horizon \
+    --inpaint_horizon $inpaint_horizon \
+    --noise_steps $noise_steps \
     --cond_dim $cond_dim \
     --output_dim $output_dim \
     --model $model \
+    --dataset_dir $dataset_dir \
     --dataset $dataset
 
-# Set the desired parameter values
-model ="UNet_Film"
-# Run the Python script with the specified arguments
+noise_steps=400
+model="default"
+
 python train.py \
     --n_epochs $n_epochs \
-    --amp \
+
     --batch_size $batch_size \
+    --lr $lr \
     --obs_horizon $obs_horizon \
     --pred_horizon $pred_horizon \
     --action_horizon $action_horizon \
+    --inpaint_horizon $inpaint_horizon \
+    --noise_steps $noise_steps \
     --cond_dim $cond_dim \
     --output_dim $output_dim \
     --model $model \
+    --dataset_dir $dataset_dir \
     --dataset $dataset
