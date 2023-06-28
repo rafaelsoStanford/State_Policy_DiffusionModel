@@ -9,6 +9,7 @@ from PIL import Image
 import io
 from datetime import datetime
 import pytorch_lightning as pl
+import os
 
 # Loading modules
 from models.Unet_FiLmLayer import *
@@ -31,7 +32,7 @@ class Diffusion(pl.LightningModule):
 
         self.save_hyperparameters()
         self.date = datetime.today().strftime('%Y-%m-%d-%H')
-    # ==================== Init ====================
+# ==================== Init ====================
     # --------------------- Diffusion params ---------------------
         self.obs_horizon = obs_horizon
         self.pred_horizon = pred_horizon
@@ -84,9 +85,11 @@ class Diffusion(pl.LightningModule):
             self.vision_encoder = vision.encoder
         self.vision_encoder.device = self.device
         self.vision_encoder.eval() # 128 entries
-        
-        print_hyperparameters(
-           obs_horizon, pred_horizon, observation_dim, prediction_dim, noise_steps, inpaint_horizon, model, learning_rate, vision_encoder)
+
+        # --------------------- Output environment settings ---------------------
+        if os.getenv("LOCAL_RANK", '0') == '0':
+            print_hyperparameters(
+            obs_horizon, pred_horizon, observation_dim, prediction_dim, noise_steps, inpaint_horizon, model, learning_rate, vision_encoder)
 
 # ==================== Training ====================
     def training_step(self, batch, batch_idx):
@@ -136,11 +139,6 @@ class Diffusion(pl.LightningModule):
         x_noisy = self.q_forwardProcess(x_0, t, noise) # (B, 1 , pred_horizon, pred_dim)
 
         x_noisy = self.add_constraints(x_noisy, x_0)
-
-        # # Inpaint: replace the first datapoint with the condition
-        # x_noisy[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :].clone() # inpaint the first datapoint (should be enough)
-        # x_noisy[:, :, :, 2] = torch.clip(x_noisy[:, :, :, 2].clone(), min=-1.0, max=1.0) # Enforce action limits (steering angle)
-        # x_noisy[:, :, :, 3:] = torch.clip(x_noisy[:, :, :, 3:].clone(), min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
 
         # ---------------- Estimate noise / Single Backward process ----------------
         # Estimate noise using noise_predictor
@@ -201,10 +199,6 @@ class Diffusion(pl.LightningModule):
                 x_t =  self.p_reverseProcess(obs_cond,  x_t,  t)
 
                 x_t = self.add_constraints(x_t, x_0)
-                # Inpaint: replace the first datapoint with the condition
-                # x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :] # inpaint 
-                # x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2], min=-1.0, max=1.0) # Enforce action limits (steering angle)
-                # x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:], min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
                 
                 sampling_history.append(x_t.squeeze().detach().cpu().numpy())
             self.plt_toVideo(
@@ -234,10 +228,6 @@ class Diffusion(pl.LightningModule):
             x_t =  self.p_reverseProcess(x_cond,  x_t,  t)
 
             x_t = self.add_constraints(x_t, x_0)
-            # # Inpaint: replace the first datapoint with the condition
-            # x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :] # inpaint 
-            # x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2], min=-1.0, max=1.0) # Enforce action limits (steering angle)
-            # x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:], min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
 
         return x_t
 

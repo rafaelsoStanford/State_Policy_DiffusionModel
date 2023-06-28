@@ -30,12 +30,48 @@ def parse_arguments():
     
     parser.add_argument('--cond_dim', type=int, default=128+2+3, help='Dimension of diffusion input state')
     parser.add_argument('--output_dim', type=int, default=5, help='Dimension of diffusion output state')
-    parser.add_argument('--model', type=str, default='default', help='String for choosing model architecture')
+    parser.add_argument('--model', type=str, default='UNet_Film', help='String for choosing model architecture')
 
     parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
     parser.add_argument('--dataset', type=str, default='ThreeBehaviours_20Eps.zarr.zip', help='zarr.zip dataset filename')
     
     return parser.parse_args()
+
+
+
+# # =========== DATA OUTPUT FUNCTION ===========
+
+def print_dataset_info(dataset_dir, dataset_name, dataloader, logger):
+    # Dataset information
+    print("========= Dataset Information =========")
+    print("Dataset Directory:", dataset_dir)
+    print("Dataset Name:", dataset_name)
+    # Load the dataset
+    print("Dataset Length:", len(dataloader))
+
+    # TensorBoard information
+    print("\n========= TensorBoard Information =========")
+    print("TensorBoard Log Directory:", logger.log_dir)
+
+    # Lightning Trainer information
+    print("\n========= Lightning Trainer Information =========")
+    print("Max Epochs:", args.n_epochs)
+    print("Batch Size:", args.batch_size)
+    print("Learning Rate:", args.lr)
+    print("Accelerator:", "GPU" if torch.cuda.is_available() else "CPU")
+
+    # Device information
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Device:", device)
+    if device.type == "cuda":
+        print("GPU Name:", torch.cuda.get_device_name(device))
+
+    # PyTorch Lightning information
+    pl.seed_everything(42)  # Set random seed for reproducibility
+    print("\n========= PyTorch Lightning Information =========")
+    print("PyTorch Lightning Version:", pl.__version__)
+
+
 
 # =========== data loader module ===========
 # data module
@@ -137,6 +173,8 @@ def main(args):
                          callbacks=[early_stop_callback, checkpoint_callback],
                          logger=tensorboard, profiler="simple", val_check_interval=0.25, 
                          accumulate_grad_batches=1, gradient_clip_val=0.5) #, strategy='ddp_find_unused_parameters_true') 
+    if os.getenv("LOCAL_RANK", '0') == '0':
+        print_dataset_info(dataset_dir, dataset_name, train_dataloader, tensorboard)
 
     trainer.validate(model= diffusion, dataloaders=valid_dataloader)
     trainer.fit(model=diffusion, train_dataloaders=train_dataloader, val_dataloaders=valid_dataloader)
@@ -144,3 +182,8 @@ def main(args):
 if __name__ == "__main__":
     args = parse_arguments()
     main(args)
+
+
+
+
+
