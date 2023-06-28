@@ -5,7 +5,7 @@ import torch
 import numpy as np
 
 
-dataset_path = "./data/ThreeBehaviours_20Eps.zarr.zip"
+dataset_path = "./data/testingActionGeneration.zarr.zip"
 # read from zarr dataset
 dataset_root = zarr.open(dataset_path, 'r')
 
@@ -21,7 +21,7 @@ episode_ends = dataset_root['meta']['episode_ends'][:]
 
 # Visualize the action data
 fig = plt.figure()
-plt.plot(train_data['action'][0:episode_ends[0],0])
+#plt.plot(train_data['action'][0:episode_ends[0],0])
 plt.scatter( np.arange(train_data['action'][0:episode_ends[0],:].shape[0]), train_data['action'][0:episode_ends[0],0] , c='r', s=1)
 # ax2.plot(train_data['action'][0:episode_ends[0],1])
 # ax2.scatter( np.arange(train_data['action'].shape[0]), train_data['action'][:,1] , c='r', s=1)
