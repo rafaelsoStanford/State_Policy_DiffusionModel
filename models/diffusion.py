@@ -43,8 +43,10 @@ class Diffusion(pl.LightningModule):
         self.inpaint_horizon = inpaint_horizon
     # --------------------- Model Architecture ---------------------
         if model == 'UNet_Film':
+            print("Loading UNet with FiLm conditioning")
             self.model = UNet_Film
         else:
+            print("Loading UNet (simple) ")
             self.model = UNet
 
     # --------------------- Noise Schedule Params---------------------
@@ -73,17 +75,20 @@ class Diffusion(pl.LightningModule):
 
         ### Define model which will be a simplifed 1D UNet
         if vision_encoder == 'resnet18':
+            print("Loading Resnet18")
             self.vision_encoder = VisionEncoder() # Loads pretrained weights of Resnet18 with output dim 512 (also modified layers as Suggested by Song et al.)
         
         else:
+            print("Loading lightweight Autoencoder")
             vision = autoencoder.load_from_checkpoint(checkpoint_path="./tb_logs_autoencoder/version_23/checkpoints/epoch=25.ckpt")
             self.vision_encoder = vision.encoder
         self.vision_encoder.device = self.device
         self.vision_encoder.eval() # 128 entries
         
+        print_hyperparameters(
+           obs_horizon, pred_horizon, observation_dim, prediction_dim, noise_steps, inpaint_horizon, model, learning_rate, vision_encoder)
 
 # ==================== Training ====================
-
     def training_step(self, batch, batch_idx):
         loss = self.onepass(batch, batch_idx, mode="train")
         self.log("train_loss",loss)
@@ -93,11 +98,9 @@ class Diffusion(pl.LightningModule):
 # ==================== Testing ====================
     def test_step(self, batch, batch_idx):
         if batch_idx == 0:
-            plot_hist = []
             self.sample(batch, batch_idx, mode="test")
 
 # ==================== Validation ====================    
-
     def validation_step(self, batch, batch_idx):
         if batch_idx == 0:
             self.sample(batch, batch_idx, mode="validation")
@@ -132,10 +135,12 @@ class Diffusion(pl.LightningModule):
         noise = torch.randn_like(x_0)
         x_noisy = self.q_forwardProcess(x_0, t, noise) # (B, 1 , pred_horizon, pred_dim)
 
-        # Inpaint: replace the first datapoint with the condition
-        x_noisy[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :].clone() # inpaint the first datapoint (should be enough)
-        x_noisy[:, :, :, 2] = torch.clip(x_noisy[:, :, :, 2].clone(), min=-1.0, max=1.0) # Enforce action limits (steering angle)
-        x_noisy[:, :, :, 3:] = torch.clip(x_noisy[:, :, :, 3:].clone(), min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
+        x_noisy = self.add_constraints(x_noisy, x_0)
+
+        # # Inpaint: replace the first datapoint with the condition
+        # x_noisy[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :].clone() # inpaint the first datapoint (should be enough)
+        # x_noisy[:, :, :, 2] = torch.clip(x_noisy[:, :, :, 2].clone(), min=-1.0, max=1.0) # Enforce action limits (steering angle)
+        # x_noisy[:, :, :, 3:] = torch.clip(x_noisy[:, :, :, 3:].clone(), min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
 
         # ---------------- Estimate noise / Single Backward process ----------------
         # Estimate noise using noise_predictor
@@ -153,6 +158,7 @@ class Diffusion(pl.LightningModule):
 
     # ---------------------- Sampling --------------------------------
     def sample(self, batch, batch_idx, mode):
+    
         # ---------------- Prepare Data ----------------
         x_0 , obs_cond = self.prepare_pred_cond_vectors(batch)
         x_0 = x_0[0,...].unsqueeze(0).unsqueeze(1)
@@ -164,7 +170,7 @@ class Diffusion(pl.LightningModule):
 
         positions_groundtruth = x_0.squeeze()[:, :2].detach().cpu().numpy() #(20 , 2)
         actions_groundtruth = x_0.squeeze()[:, 2:].squeeze().detach().cpu().numpy() #(20 , 3)
-        
+    
 
         # ---------------- Plotting ----------------
         if mode == 'validation':
@@ -183,6 +189,8 @@ class Diffusion(pl.LightningModule):
                 actions_groundtruth = actions_groundtruth,
                 actions_observation = actions_observation,
             )
+
+
             
         if mode == 'test':
             # Sample and save to video
@@ -192,10 +200,11 @@ class Diffusion(pl.LightningModule):
             for t in reversed(range(0,self.noise_steps)): # t ranges from 999 to 0
                 x_t =  self.p_reverseProcess(obs_cond,  x_t,  t)
 
+                x_t = self.add_constraints(x_t, x_0)
                 # Inpaint: replace the first datapoint with the condition
-                x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :] # inpaint 
-                x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2], min=-1.0, max=1.0) # Enforce action limits (steering angle)
-                x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:], min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
+                # x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :] # inpaint 
+                # x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2], min=-1.0, max=1.0) # Enforce action limits (steering angle)
+                # x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:], min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
                 
                 sampling_history.append(x_t.squeeze().detach().cpu().numpy())
             self.plt_toVideo(
@@ -224,10 +233,11 @@ class Diffusion(pl.LightningModule):
         for t in reversed(range(0,self.noise_steps)): # t ranges from 999 to 0
             x_t =  self.p_reverseProcess(x_cond,  x_t,  t)
 
-            # Inpaint: replace the first datapoint with the condition
-            x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :] # inpaint 
-            x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2], min=-1.0, max=1.0) # Enforce action limits (steering angle)
-            x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:], min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
+            x_t = self.add_constraints(x_t, x_0)
+            # # Inpaint: replace the first datapoint with the condition
+            # x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :] # inpaint 
+            # x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2], min=-1.0, max=1.0) # Enforce action limits (steering angle)
+            # x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:], min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
 
         return x_t
 
@@ -241,7 +251,13 @@ class Diffusion(pl.LightningModule):
         x_t = 1/torch.sqrt(self.alphas[t])* (x_t-(1-self.alphas[t])/torch.sqrt(1-self.alphas_cumprod[t])*est_noise) +  torch.sqrt(self.betas[t])*z
         return x_t
 
-
+    def add_constraints(self, x_t , x_0):
+        # Adding constraints by inpainting before denoising. 
+        # Add all constaints here
+        x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :].clone() # inpaint the first datapoint (should be enough)
+        x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2].clone(), min=-1.0, max=1.0) # Enforce action limits (steering angle)
+        x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:].clone(), min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
+        return x_t
 
     # ==================== Helper functions ====================
     def prepare_pred_cond_vectors(self, batch):
@@ -326,6 +342,8 @@ class Diffusion(pl.LightningModule):
 
         plt2tsb(fig2, writer, 'Action comparisons' + self.date , niter)
 
+        plt.close('all')
+
 
     def plt_toVideo(self, 
                     sampling_history,
@@ -368,7 +386,7 @@ class Diffusion(pl.LightningModule):
         animation.save('./animations/animation.gif', writer='pillow')
 
         # # Show the final plot
-        # plt.show()
+        plt.show()
 
 
 # ==================== Utils ====================
@@ -411,3 +429,38 @@ def cosine_beta_schedule(self, timesteps, s=0.008, dtype=torch.float32):
     betas_clipped = np.clip(betas, a_min=0, a_max=0.999)
     betas =  torch.tensor(betas_clipped, dtype=dtype)
     return betas
+
+def print_hyperparameters(obs_horizon, pred_horizon, observation_dim, prediction_dim, noise_steps, inpaint_horizon, model, learning_rate, vision_encoder):
+    print("*" * 20 + " OVERVIEW " +  "*" * 20)
+    print()
+    print("======== Hyperparameters =======")
+    print("Date:", datetime.today().strftime('%Y-%m-%d-%H'))
+    print("Observation Horizon:", obs_horizon)
+    print("Prediction Horizon:", pred_horizon)
+    print("Observation Dimension:", observation_dim)
+    print("Prediction Dimension:", prediction_dim)
+    print("Noise Steps:", noise_steps)
+    print("Inpaint Horizon:", inpaint_horizon)
+
+    print("======== Model Architecture =======")
+    if model == 'UNet_Film':
+        print("Model: UNet with FiLm conditioning")
+    else:
+        print("Model: UNet (simple)")
+    print(" Learning Rate:", learning_rate)
+
+    print("======== Model =======")
+    print("Noise Estimator Model:")
+    print("- In Channels:", 1)
+    print("- Out Channels:", 1)
+    print("- Noise Steps:", noise_steps)
+    print("- Global Conditioning Dimension:", (observation_dim) * obs_horizon)
+    print("- Time Dimension:", 256)
+
+    print("Vision Encoder Model:")
+    if vision_encoder == 'resnet18':
+        print("Vision Encoder: Resnet18")
+    else:
+        print("Vision Encoder: Lightweight Autoencoder")
+    print()
+    print("*" * 40)

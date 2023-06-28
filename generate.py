@@ -56,11 +56,13 @@ def main():
     batch_size = 16
 
     # =========== Load Model ===========
-    path_hyperparams = './tb_logs/version_416/hparams.yaml'
+    path_hyperparams = './tb_logs/version_423/hparams.yaml'
+    path_checkpoint = './tb_logs/version_423/checkpoints/epoch=8.ckpt'
+
     model_params = fetch_hyperparams_from_yaml(path_hyperparams)
     model = Diffusion.load_from_checkpoint(
-        './tb_logs/version_416/checkpoints/epoch=24.ckpt',
-        hparams_file='./tb_logs/version_416/hparams.yaml'
+        path_checkpoint,
+        hparams_file=path_hyperparams
     )
     model.eval() 
 
