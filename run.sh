@@ -1,92 +1,19 @@
-#!/bin/bash
+python train.py --model="UNet_Film" --dataset="Sinusoidal_dataset_5_episodes.zarr.zip" \
+ --batch_size=16 --obs_horizon=10 --pred_horizon=20 --inpaint_horizon=5
 
-# Set constant values
-n_epochs=50
+python train.py --model="UNet_Film" --dataset="Sinusoidal_dataset_5_episodes.zarr.zip" \
+ --batch_size=16 --obs_horizon=10 --pred_horizon=20 --inpaint_horizon=10
 
-batch_size=16
-lr=1e-4
-obs_horizon=20
-pred_horizon=40
-action_horizon=1
-inpaint_horizon=5
-noise_steps=1000
-cond_dim=133
-output_dim=5
-model="default"
-dataset_dir="./data"
-dataset="ThreeBehaviours_20Eps.zarr.zip"
+python train.py --model="UNet_Film" --dataset="Sinusoidal_dataset_5_episodes.zarr.zip" \
+ --batch_size=16 --obs_horizon=20 --pred_horizon=40 --inpaint_horizon=10
 
-# Run the Python script
-python train.py \
-    --n_epochs $n_epochs \
+python train.py --model="UNet_Film" --dataset="TestingActions_dataset_5_episodes_3_modes.zarr.zip" \
+ --batch_size=16 --obs_horizon=10 --pred_horizon=20 --inpaint_horizon=5
 
-    --batch_size $batch_size \
-    --lr $lr \
-    --obs_horizon $obs_horizon \
-    --pred_horizon $pred_horizon \
-    --action_horizon $action_horizon \
-    --inpaint_horizon $inpaint_horizon \
-    --noise_steps $noise_steps \
-    --cond_dim $cond_dim \
-    --output_dim $output_dim \
-    --model $model \
-    --dataset_dir $dataset_dir \
-    --dataset $dataset
+python train.py --model="UNet_Film" --dataset="TestingActions_dataset_5_episodes_3_modes.zarr.zip" \
+ --batch_size=16 --obs_horizon=10 --pred_horizon=20 --inpaint_horizon=10
 
-model="UNet_Film"
+python train.py --model="UNet_Film" --dataset="TestingActions_dataset_5_episodes_3_modes.zarr.zip" \
+ --batch_size=16 --obs_horizon=20 --pred_horizon=40 --inpaint_horizon=10
 
-python train.py \
-    --n_epochs $n_epochs \
 
-    --batch_size $batch_size \
-    --lr $lr \
-    --obs_horizon $obs_horizon \
-    --pred_horizon $pred_horizon \
-    --action_horizon $action_horizon \
-    --inpaint_horizon $inpaint_horizon \
-    --noise_steps $noise_steps \
-    --cond_dim $cond_dim \
-    --output_dim $output_dim \
-    --model $model \
-    --dataset_dir $dataset_dir \
-    --dataset $dataset
-
-obs_horizon=40
-pred_horizon=40
-action_horizon=1
-inpaint_horizon=5
-
-python train.py \
-    --n_epochs $n_epochs \
-
-    --batch_size $batch_size \
-    --lr $lr \
-    --obs_horizon $obs_horizon \
-    --pred_horizon $pred_horizon \
-    --action_horizon $action_horizon \
-    --inpaint_horizon $inpaint_horizon \
-    --noise_steps $noise_steps \
-    --cond_dim $cond_dim \
-    --output_dim $output_dim \
-    --model $model \
-    --dataset_dir $dataset_dir \
-    --dataset $dataset
-
-noise_steps=400
-model="default"
-
-python train.py \
-    --n_epochs $n_epochs \
-
-    --batch_size $batch_size \
-    --lr $lr \
-    --obs_horizon $obs_horizon \
-    --pred_horizon $pred_horizon \
-    --action_horizon $action_horizon \
-    --inpaint_horizon $inpaint_horizon \
-    --noise_steps $noise_steps \
-    --cond_dim $cond_dim \
-    --output_dim $output_dim \
-    --model $model \
-    --dataset_dir $dataset_dir \
-    --dataset $dataset

@@ -110,7 +110,7 @@ class CarRacingDataset(torch.utils.data.Dataset):
         self.sequence_len = obs_horizon + pred_horizon # chunk lenght of data
         self.normalized_train_data = {}
 
-        
+        print("Loading Data from Zarr File")
 
         # read from zarr dataset
         dataset_root = zarr.open(dataset_path, 'r')
@@ -147,7 +147,7 @@ class CarRacingDataset(torch.utils.data.Dataset):
         self.stats = stats
 
         self.normalized_train_data['image'] = train_image_data # [:,: , :80, :80] # Assumed to be already normalized, cropped to 80x80 removing the black border
-        self.normalized_train_data['action'] = train_data['action'] # All action space values are constrained to [-1,1]
+        self.normalized_train_data['action'] = normalized_train_data['action'] # train_data['action'] # All action space values are constrained to [-1,1]
         self.normalized_train_data['position'] = train_data['position'] 
         self.indices = indices
         # self.stats = stats
@@ -179,6 +179,8 @@ class CarRacingDataset(torch.utils.data.Dataset):
         translation_vec = sample_normalized[0,:]
         nsample_centered = sample_normalized - translation_vec
         nsample['position'] = nsample_centered / 2.0
+
+
 
         # position_sample = nsample['position']
         # translation_vec = position_sample[0,:]

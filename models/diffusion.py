@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 from matplotlib.cm import get_cmap
 from matplotlib.animation import FuncAnimation
 
@@ -15,8 +16,7 @@ import os
 from models.Unet_FiLmLayer import *
 from models.simple_Unet import * 
 from models.encoder.autoencoder import *
-
-
+from utils.print_utils import *
 
 class Diffusion(pl.LightningModule):
     def __init__(self, noise_steps=1000
@@ -108,7 +108,7 @@ class Diffusion(pl.LightningModule):
         if batch_idx == 0:
             self.sample(batch, batch_idx, mode="validation")
         loss = self.onepass(batch, batch_idx, mode="validation")
-        self.log("val_loss",loss)
+        self.log("val_loss",loss,  sync_dist=True)
         return loss
 
 
@@ -187,8 +187,6 @@ class Diffusion(pl.LightningModule):
                 actions_groundtruth = actions_groundtruth,
                 actions_observation = actions_observation,
             )
-
-
             
         if mode == 'test':
             # Sample and save to video
@@ -201,10 +199,13 @@ class Diffusion(pl.LightningModule):
                 x_t = self.add_constraints(x_t, x_0)
                 
                 sampling_history.append(x_t.squeeze().detach().cpu().numpy())
+            
             self.plt_toVideo(
                 sampling_history,
                 positions_groundtruth = positions_groundtruth,
-                position_observation = position_observation)
+                position_observation = position_observation,
+                actions_groundtruth = actions_groundtruth,
+                actions_observation = actions_observation)
 
          # q(x_t | x_0)
     def q_forwardProcess(self, x_start, t, noise):
@@ -246,7 +247,7 @@ class Diffusion(pl.LightningModule):
         # Add all constaints here
         x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :].clone() # inpaint the first datapoint (should be enough)
         x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2].clone(), min=-1.0, max=1.0) # Enforce action limits (steering angle)
-        x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:].clone(), min=0.0, max=1.0)   # Enforce action limits (acceleration and brake)
+        x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:].clone(), min=-1.0, max=1.0)   # Enforce action limits (acceleration and brake)
         return x_t
 
     # ==================== Helper functions ====================
@@ -311,7 +312,7 @@ class Diffusion(pl.LightningModule):
 
         # Plot to tensorboard
         plt2tsb(fig, writer, 'Predicted_path ' + self.date , niter)
-
+        
         # ---------------- Action space Plotting ----------------
         # Visualize the action data
         inpaint_start = 0
@@ -320,15 +321,21 @@ class Diffusion(pl.LightningModule):
         fig2, (ax1, ax2, ax3) = plt.subplots(1, 3)
         ax1.plot(actions_predicted[:,0])
         ax1.plot(actions_groundtruth[:,0])
-        ax1.axvspan(inpaint_start, inpaint_end, alpha=0.3, color='red')
+        ax1.scatter(np.arange(actions_predicted.shape[0]), actions_predicted[:,0] , c='r', s=10)
+        ax1.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
+        ax1.axvspan(inpaint_end, actions_predicted.shape[0], alpha=0.2, color='green')
 
         ax2.plot(actions_predicted[:,1])
         ax2.plot(actions_groundtruth[:,1])
-        ax2.axvspan(inpaint_start, inpaint_end, alpha=0.3, color='red')
+        ax2.scatter(np.arange(actions_predicted.shape[0]), actions_predicted[:,1] , c='r', s=10)
+        ax2.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
+        ax2.axvspan(inpaint_end, actions_predicted.shape[0], alpha=0.2, color='green')
 
         ax3.plot(actions_predicted[:,2])
         ax3.plot(actions_groundtruth[:,2])
-        ax3.axvspan(inpaint_start, inpaint_end, alpha=0.3, color='red')
+        ax3.scatter(np.arange(actions_predicted.shape[0]), actions_predicted[:,2] , c='r', s=10)
+        ax3.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
+        ax3.axvspan(inpaint_end, actions_predicted.shape[0], alpha=0.2, color='green')
 
         plt2tsb(fig2, writer, 'Action comparisons' + self.date , niter)
 
@@ -338,45 +345,138 @@ class Diffusion(pl.LightningModule):
     def plt_toVideo(self, 
                     sampling_history,
                     position_observation,   
-                    positions_groundtruth):
+                    positions_groundtruth, 
+                    actions_groundtruth ,
+                    actions_observation):
+        
+        sampling_positions = np.array(sampling_history)[:, :, :2]  # (1000, 45 , 2)
+        sampling_actions = np.array(sampling_history)[:, :, 2:]  # (1000, 45 , 3)
 
-        sampling_positions = np.array(sampling_history)[:, :, :2]
-        sampling_actions = np.array(sampling_history)[:, :, 2:]
+        def plot_positions():
+            fig, ax = plt.subplots()
 
-        # Create a figure and axis
-        fig, ax = plt.subplots()
+            cmap = plt.get_cmap('viridis', self.pred_horizon + self.inpaint_horizon)
+            indices = np.arange(self.pred_horizon + self.inpaint_horizon)
 
-        # Create a colormap for fading colors based on the number of timesteps
-        cmap = plt.get_cmap('viridis', self.pred_horizon + self.inpaint_horizon)
+            def animate(frame):
+                fig.clf()
+                normalized_indices = indices / (self.pred_horizon + self.inpaint_horizon - 1)
+                colors = cmap(normalized_indices)
 
-        # Create an array of indices from 0 to timesteps-1
-        indices = np.arange(self.pred_horizon + self.inpaint_horizon)
+                plt.plot(position_observation[:, 0], position_observation[:, 1], 'b.')
+                plt.plot(positions_groundtruth[self.inpaint_horizon:, 0], positions_groundtruth[self.inpaint_horizon:, 1], 'g.')
+                plt.scatter(sampling_positions[frame, :, 0], sampling_positions[frame, :, 1], color=colors, s=20)
 
-        def animate(frame):
-            fig.clf()
-            # Normalize the indices to the range [0, 1]
-            normalized_indices = indices / (self.pred_horizon + self.inpaint_horizon - 1)
-            # Create a color array using the colormap and normalized indices
-            colors = cmap(normalized_indices)
+                plt.grid()
+                plt.axis('equal')
+                plt.xlim(-1.5, 1.5)
+                plt.ylim(-1.5, 1.5)
 
-            plt.plot(position_observation[:, 0], position_observation[:, 1], 'b.')
-            plt.plot(positions_groundtruth[self.inpaint_horizon:, 0], positions_groundtruth[self.inpaint_horizon:, 1], 'g.')
-            plt.scatter(sampling_positions[frame, :, 0], sampling_positions[frame, :, 1], color=colors, s=20)
+            fig.animation = FuncAnimation(fig, animate, frames=self.noise_steps, interval=20, repeat=False)
+            fig.animation.save('./animations/' + self.date + 'animation_positions.gif', writer='pillow')
+            print("Animation saved")
+            plt.close('all')
 
-            plt.grid()
-            plt.axis('equal')
-            plt.xlim(-1.5, 1.5)
-            plt.ylim(-1.5, 1.5)
+        def plot_actions():
+            fig2, (ax1, ax2, ax3) = plt.subplots(1, 3)
+            ax1.plot(actions_groundtruth[:, 0])
+            ax2.plot(actions_groundtruth[ :, 1])
+            ax3.plot(actions_groundtruth[ :, 2])
+            inpaint_start = 0
+            inpaint_end = self.inpaint_horizon
+            ax1.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
+            ax1.axvspan(inpaint_end, sampling_actions.shape[1], alpha=0.2, color='green')
+            def animate_actions(frame):
 
 
-        # Create an animation using the FuncAnimation class
-        animation = FuncAnimation(fig, animate, frames=self.noise_steps, interval=20, repeat=False)
+                #ax1.plot(sampling_actions[frame, :, 0])
+                ax1.scatter(np.arange(sampling_actions.shape[1]), sampling_actions[frame,:,0] , c='r', s=10)
 
-        # Save the animation as a GIF
-        animation.save('./animations/animation.gif', writer='pillow')
+                # ax2.plot(sampling_actions[frame, :, 1])
+                
 
+                # ax3.plot(sampling_actions[frame, :, 2])
+                
+
+            fig2.animation = FuncAnimation(fig2, animate_actions, frames=self.noise_steps, interval=20, repeat=False)
+            fig2.animation.save('./animations/' + self.date + 'animation_actions.gif', writer='pillow')
+            print("Animation saved")
+            plt.close('all')
+        plot_positions()
+        plot_actions()
+
+
+        # sampling_positions = np.array(sampling_history)[:, :, :2] # (1000, 45 , 2)
+        # sampling_actions = np.array(sampling_history)[:, :, 2:] # (1000, 45 , 3)
+
+
+        # # ---------------- Plotting position points ----------------
+        # # Create a figure and axis
+        # fig, ax = plt.subplots()
+
+        # # Create a colormap for fading colors based on the number of timesteps
+        # cmap = plt.get_cmap('viridis', self.pred_horizon + self.inpaint_horizon)
+
+        # # Create an array of indices from 0 to timesteps-1
+        # indices = np.arange(self.pred_horizon + self.inpaint_horizon)
+
+        # def animate(frame):
+        #     fig.clf()
+        #     # Normalize the indices to the range [0, 1]
+        #     normalized_indices = indices / (self.pred_horizon + self.inpaint_horizon - 1)
+        #     # Create a color array using the colormap and normalized indices
+        #     colors = cmap(normalized_indices)
+
+        #     plt.plot(position_observation[:, 0], position_observation[:, 1], 'b.')
+        #     plt.plot(positions_groundtruth[self.inpaint_horizon:, 0], positions_groundtruth[self.inpaint_horizon:, 1], 'g.')
+        #     plt.scatter(sampling_positions[frame, :, 0], sampling_positions[frame, :, 1], color=colors, s=20)
+
+        #     plt.grid()
+        #     plt.axis('equal')
+        #     plt.xlim(-1.5, 1.5)
+        #     plt.ylim(-1.5, 1.5)
+        
+        
+        # # Create an animation using the FuncAnimation class
+        # animation = FuncAnimation(fig, animate, frames=self.noise_steps, interval=20, repeat=False)
+        # # Save the animation as a GIF
+        # animation.save('./animations/' + self.date +'animation_positions.gif', writer='pillow')
+
+        # print("Animation saved")
+
+        # # ---------------- Plotting action points ----------------
+        # fig2, (ax1, ax2, ax3) = plt.subplots(1, 3)
+        # def annimate_actions(frame):
+        #     # ---------------- Action space Plotting ----------------
+        #     # Visualize the action data
+        #     inpaint_start = 0
+        #     inpaint_end = self.inpaint_horizon
+
+        #     ax1.plot(sampling_actions[frame, :,0])
+        #     ax1.plot(actions_groundtruth[:,0])
+        #     # ax1.scatter(np.arange(sampling_actions.shape[1]), sampling_actions[frame,:,0] , c='r', s=10)
+        #     # ax1.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
+        #     # ax1.axvspan(inpaint_end, sampling_actions.shape[1], alpha=0.2, color='green')
+
+        #     ax2.plot(sampling_actions[frame,:,1])
+        #     ax2.plot(actions_groundtruth[:,1])
+        #     # ax2.scatter(np.arange(sampling_actions.shape[1]), sampling_actions[frame,:,1] , c='r', s=10)
+        #     # ax2.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
+        #     # ax2.axvspan(inpaint_end, sampling_actions.shape[1], alpha=0.2, color='green')
+
+        #     ax3.plot(sampling_actions[frame,:,2])
+        #     ax3.plot(actions_groundtruth[:,2])
+        #     # ax3.scatter(np.arange(sampling_actions.shape[1]), sampling_actions[frame,:,2] , c='r', s=10)
+        #     # ax3.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
+        #     # ax3.axvspan(inpaint_end, sampling_actions.shape[1], alpha=0.2, color='green')
+
+        # # Create an animation using the FuncAnimation class
+        # animation = FuncAnimation(fig2, annimate_actions, frames=self.noise_steps, interval=20, repeat=False)
+        # animation.save('./animations/' + self.date +'animation_actions.gif', writer='pillow')
+
+        # print("Animation saved")
         # # Show the final plot
-        plt.show()
+        # plt.show()
 
 
 # ==================== Utils ====================
@@ -419,38 +519,3 @@ def cosine_beta_schedule(self, timesteps, s=0.008, dtype=torch.float32):
     betas_clipped = np.clip(betas, a_min=0, a_max=0.999)
     betas =  torch.tensor(betas_clipped, dtype=dtype)
     return betas
-
-def print_hyperparameters(obs_horizon, pred_horizon, observation_dim, prediction_dim, noise_steps, inpaint_horizon, model, learning_rate, vision_encoder):
-    print("*" * 20 + " OVERVIEW " +  "*" * 20)
-    print()
-    print("======== Hyperparameters =======")
-    print("Date:", datetime.today().strftime('%Y-%m-%d-%H'))
-    print("Observation Horizon:", obs_horizon)
-    print("Prediction Horizon:", pred_horizon)
-    print("Observation Dimension:", observation_dim)
-    print("Prediction Dimension:", prediction_dim)
-    print("Noise Steps:", noise_steps)
-    print("Inpaint Horizon:", inpaint_horizon)
-
-    print("======== Model Architecture =======")
-    if model == 'UNet_Film':
-        print("Model: UNet with FiLm conditioning")
-    else:
-        print("Model: UNet (simple)")
-    print(" Learning Rate:", learning_rate)
-
-    print("======== Model =======")
-    print("Noise Estimator Model:")
-    print("- In Channels:", 1)
-    print("- Out Channels:", 1)
-    print("- Noise Steps:", noise_steps)
-    print("- Global Conditioning Dimension:", (observation_dim) * obs_horizon)
-    print("- Time Dimension:", 256)
-
-    print("Vision Encoder Model:")
-    if vision_encoder == 'resnet18':
-        print("Vision Encoder: Resnet18")
-    else:
-        print("Vision Encoder: Lightweight Autoencoder")
-    print()
-    print("*" * 40)
