@@ -1,52 +1,59 @@
-# Diffusion Model 
+# Diffusion Model - Robot Policies for Shared Autonomy
 
 ### WORK IN PROGRESS ###
 
+## Leveraging Human Intent for Shared Autonomy and Risk Negotiation
 
-# Leveraging Human Intent for Shared Autonomy and Risk Negotiation
+The diffusion model is designed to enable shared autonomy for transitions from AI to human control of a vehicle. The goal is to create an agent capable of identifying human driver behavior and safely transitioning vehicle control.
 
-Shared autonomy for transitions from AI to human control of a vehicle. Design of an agent capable identifying human driver behavior and safely transitioning vehicle control.
+This project consists of three stages:
 
-This is a three-stage project: 
-- Trajectory prediction conditioned on human driver behavior.
-- Classification of future trajectory as safe/unsafe.
-- Finally if safe begin shared control strategy, slowly handing over vehicle control to driver.
+1. **Trajectory Prediction** - The agent utilizes a diffusion policy model trained on various human driver behaviors to make trajectory predictions conditioned on past state observations and driver inputs.
+
+2. **Risk Assessment** - The agent employs risk negotiation strategies to assess potential risks associated with control transitions and makes proactive decisions to mitigate them. This ensures that the vehicle operates in a safe and reliable manner.
+
+3. **Control Transition** - The system is designed to smoothly transfer control of the vehicle from the AI agent to the human driver. The transition should be smooth after evaluating the risks involved.
 
 ## Features
-- **Behavior Identification**: The agent is equipped with a diffusion policy model trained on various human driver behaviors, allowing it to make trajectory predictions conditioned on past state observations and driver inputs.
 
-- **Risk Negotiation**: The agent employs risk negotiation strategies to assess potential risks associated with control transitions and make proactive decisions to mitigate them. This ensures that the vehicle operates in a safe and reliable manner.
+- **Behavior Identification**: The agent leverages a diffusion policy model trained on various human driver behaviors to predict trajectories based on past observations and driver inputs.
 
-- **Control Transition**: The system is designed to smoothly transfer control of the vehicle from the AI agent to the human driver. The transition should be smooth after Risk has been evaluated.
+- **Risk Negotiation**: The agent employs strategies to assess potential risks during control transitions and makes proactive decisions to mitigate them, ensuring safe operation.
 
-- **Diffusion Model Training**: The repository also includes a data generation script that can be used to train diffusion models. These models can be used to model and predict the behavior of human drivers in distinct scenarios.
--> Currently uses a Google Colab implementation which is based on the code of the following work: [Diffusion Policy
-Visuomotor Policy Learning via Action Diffusion](https://github.com/columbia-ai-robotics/diffusion_policy)
+- **Control Transition**: The system facilitates smooth transfer of control from the AI agent to the human driver once risks have been evaluated and addressed.
 
+- **Diffusion Model Training**: The repository includes a `train.py` file that can be used to train the diffusion policy using the `diffusion.py` file. The training process utilizes PyTorch Lightning.
 
+- **Data Generation**: The data used for training can be generated using the files in the `generateData` folder. Specifically, there are two files that generate sinusoidal or parallel driving behavior.
+
+- **Policy Generation**: The `generate.py` file can be used to generate policies based on the trained diffusion model.
 
 ## Prerequisites
 
 ```
 ...
-
 ```
 
-## Usage
+## Files Tree
 
-- **Data Generation**: In the corresponding folder you will find data generation script which is based on the CarRacing environment by OpenAi Gym. It uses a slightly modified version of `car_racing.py`in order to account for the desired observations. The data is saved using a .zarr structure and consequently as a.zip file, such that it is compatible with the implementation in Google Colab.
+```
+/home/rafael/git_repos/diffusion_bare/
+├── ...
+├── train.py
+├── generateData
+│   ├── generateParallelTraj.py
+│   ├── generateSinusoidalTraj.py
+│   ├── ...
+├── generate.py
+├── ...
+```
 
-- **Diffusion (Colab)**: 
-The Colab implementation is based on the image colab repository made by [Diffusion Policy
-Visuomotor Policy Learning via Action Diffusion](https://github.com/columbia-ai-robotics/diffusion_policy) . We replaced the environment to use the CarDriving-v2 from OpenAi **Gymnasium** (which is equivalent to my knowledge to gym==0.26.0). Since Colab switched to Python version 3.10.x the gym==0.21.0 is no longer compatible. Thus we modified the CarRacing environment of Gymnasium. Thus note that there are syntax differences between how `env.` functions are used, compared to our data generation files. 
-The environment inputs and outputs have stayed the same, thus the data can still be used. 
+- `train.py`: The main file for training the diffusion policy using the `diffusion.py` file with PyTorch Lightning.
 
+- `generateParallelTraj.py`: File for generating parallel driving behavior data.
 
-- **Experiments**: 
-Includes an framework of setting up a controlled Car-Racing environment in gym==0.21.0. This includes:
-- [ ] Automated multiple track generation
-- [x] Fixed track seeds for reproducability
-- [ ] Random controller choice
-- [ ] Fixing seed for controller choice
-- [x] Move starting line
-- [x] Avoid zoom
+- `generateSinusoidalTraj.py`: File for generating sinusoidal driving behavior data.
+
+- `generate.py`: File for generating policies based on the trained diffusion model.
+
+Please note that the above list includes the main files relevant to the diffusion model. There may be additional files and directories in the project structure.
