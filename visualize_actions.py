@@ -5,7 +5,7 @@ import torch
 import numpy as np
 
 
-dataset_path = "./data/testingActionGeneration.zarr.zip"
+dataset_path = "./data/Sinusoidal_dataset_5_episodes.zarr.zip"
 # read from zarr dataset
 dataset_root = zarr.open(dataset_path, 'r')
 
@@ -18,6 +18,13 @@ train_data = {
 }
 episode_ends = dataset_root['meta']['episode_ends'][:]
 
+# min max
+action_data = train_data['action']
+minAction = np.min(action_data, axis=0)
+maxAction = np.max(action_data, axis=0)
+
+print ("minAction: ", minAction)
+print ("maxAction: ", maxAction)
 
 # Visualize the action data
 fig = plt.figure()

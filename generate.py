@@ -6,7 +6,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging, ModelCheckpoint
 
 from models.diffusion import *
-from load_data import *
+from utils.load_data import *
 
 import os
 import yaml
@@ -56,8 +56,8 @@ def main():
     batch_size = 16
 
     # =========== Load Model ===========
-    path_hyperparams = './tb_logs/version_423/hparams.yaml'
-    path_checkpoint = './tb_logs/version_423/checkpoints/epoch=8.ckpt'
+    path_hyperparams = './tb_logs/version_463/hparams.yaml'
+    path_checkpoint = './tb_logs/version_463/checkpoints/epoch=38.ckpt'
 
     model_params = fetch_hyperparams_from_yaml(path_hyperparams)
     model = Diffusion.load_from_checkpoint(
@@ -75,12 +75,12 @@ def main():
     # Dataset dir and filename
     dataset_dir = './data'
     dataset = CarRacingDataModule(dataset_dir , batch_size, obs_horizon, pred_horizon )
-    dataset.setup( name='ThreeBehaviours_20Eps.zarr.zip' )
+    dataset.setup( name='Sinusoidal_dataset_5_episodes.zarr.zip' )
     test_dataloaders = dataset.val_dataloader()
 
     # =========== Pytorch Lightning Trainer  ===========
 
-    trainer = pl.Trainer(accelerator='gpu', devices=[0,1], precision=("16-mixed" if AMP else 32), max_epochs=n_epochs)
+    trainer = pl.Trainer(accelerator='gpu', devices=[0], precision=("16-mixed" if AMP else 32), max_epochs=n_epochs)
     trainer.test(model, dataloaders=test_dataloaders)
 
 if __name__ == "__main__":

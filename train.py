@@ -8,7 +8,8 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging, ModelCheckpoint
 
 from models.diffusion import *
-from load_data import *
+from utils.load_data import *
+from utils.print_utils import *
 
 # Only for Debugging
 VISUALIZE_BATCH = False
@@ -33,50 +34,15 @@ def parse_arguments():
     parser.add_argument('--model', type=str, default='UNet_Film', help='String for choosing model architecture')
 
     parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
-    parser.add_argument('--dataset', type=str, default='ThreeBehaviours_20Eps.zarr.zip', help='zarr.zip dataset filename')
+    parser.add_argument('--dataset', type=str, default='Sinusoidal_dataset_5_episodes.zarr.zip', help='zarr.zip dataset filename')
     
     return parser.parse_args()
-
-
-
-# # =========== DATA OUTPUT FUNCTION ===========
-
-def print_dataset_info(dataset_dir, dataset_name, dataloader, logger):
-    # Dataset information
-    print("========= Dataset Information =========")
-    print("Dataset Directory:", dataset_dir)
-    print("Dataset Name:", dataset_name)
-    # Load the dataset
-    print("Dataset Length:", len(dataloader))
-
-    # TensorBoard information
-    print("\n========= TensorBoard Information =========")
-    print("TensorBoard Log Directory:", logger.log_dir)
-
-    # Lightning Trainer information
-    print("\n========= Lightning Trainer Information =========")
-    print("Max Epochs:", args.n_epochs)
-    print("Batch Size:", args.batch_size)
-    print("Learning Rate:", args.lr)
-    print("Accelerator:", "GPU" if torch.cuda.is_available() else "CPU")
-
-    # Device information
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("Device:", device)
-    if device.type == "cuda":
-        print("GPU Name:", torch.cuda.get_device_name(device))
-
-    # PyTorch Lightning information
-    pl.seed_everything(42)  # Set random seed for reproducibility
-    print("\n========= PyTorch Lightning Information =========")
-    print("PyTorch Lightning Version:", pl.__version__)
-
 
 
 # =========== data loader module ===========
 # data module
 class CarRacingDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "path/to/dir", batch_size: int = 16 , T_obs=4, T_pred=8 , T_act =1):
+    def __init__(self, batch_size,  data_dir: str = "path/to/dir" , T_obs=4, T_pred=8 , T_act =1):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
@@ -105,7 +71,6 @@ class CarRacingDataModule(pl.LightningDataModule):
 ############################
 #========== MAIN ===========
 ############################
-
 def main(args):
 
     # ===========Parameters===========
@@ -134,7 +99,7 @@ def main(args):
     
     # =========== Loading Data ===========
     # Load Dataset using Pytorch Lightning DataModule
-    dataset = CarRacingDataModule(dataset_dir , batch_size, obs_horizon, pred_horizon ,action_horizon)
+    dataset = CarRacingDataModule(batch_size, dataset_dir , obs_horizon, pred_horizon ,action_horizon)
     
     dataset.setup(name=dataset_name)
     train_dataloader = dataset.train_dataloader()
@@ -174,7 +139,7 @@ def main(args):
                          logger=tensorboard, profiler="simple", val_check_interval=0.25, 
                          accumulate_grad_batches=1, gradient_clip_val=0.5) #, strategy='ddp_find_unused_parameters_true') 
     if os.getenv("LOCAL_RANK", '0') == '0':
-        print_dataset_info(dataset_dir, dataset_name, train_dataloader, tensorboard)
+        print_dataset_info(args,dataset_dir, dataset_name, train_dataloader, tensorboard)
 
     trainer.validate(model= diffusion, dataloaders=valid_dataloader)
     trainer.fit(model=diffusion, train_dataloaders=train_dataloader, val_dataloaders=valid_dataloader)
