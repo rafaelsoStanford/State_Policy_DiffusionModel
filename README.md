@@ -2,6 +2,10 @@
 
 ### WORK IN PROGRESS ###
 
+</br>![](https://github.com/rafaelsoStanford/SharedAutonomy_RiskNegotiation/blob/AddGifs/files/SafeDriver.gif) 
+</br>![](https://github.com/rafaelsoStanford/SharedAutonomy_RiskNegotiation/blob/AddGifs/files/SafeDriver.gif) 
+
+
 ## Leveraging Human Intent for Shared Autonomy and Risk Negotiation
 
 The diffusion model is designed to enable shared autonomy for transitions from AI to human control of a vehicle. The goal is to create an agent capable of identifying human driver behavior and safely transitioning vehicle control.
