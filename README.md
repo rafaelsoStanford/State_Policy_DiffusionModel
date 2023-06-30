@@ -2,8 +2,8 @@
 
 ### WORK IN PROGRESS ###
 
-</br>![](https://github.com/rafaelsoStanford/SharedAutonomy_RiskNegotiation/blob/AddGifs/files/SafeDriver.gif) 
-</br>![](https://github.com/rafaelsoStanford/SharedAutonomy_RiskNegotiation/blob/AddGifs/files/SafeDriver.gif) 
+</br>![](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/blob/main/images/2023_06_29_21-07-14animation_positions.gif)
+</br>![](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/blob/main/images/2023_06_29_21-07-14animation_actions.gif) 
 
 
 ## Leveraging Human Intent for Shared Autonomy and Risk Negotiation
