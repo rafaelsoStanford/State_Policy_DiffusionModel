@@ -56,8 +56,8 @@ def main():
     batch_size = 16
 
     # =========== Load Model ===========
-    path_hyperparams = './tb_logs/version_440/hparams.yaml'
-    path_checkpoint = './tb_logs/version_440/checkpoints/epoch=43.ckpt'
+    path_hyperparams = './tb_logs/version_463/hparams.yaml'
+    path_checkpoint = './tb_logs/version_463/checkpoints/epoch=38.ckpt'
 
     model_params = fetch_hyperparams_from_yaml(path_hyperparams)
     model = Diffusion.load_from_checkpoint(
@@ -75,7 +75,7 @@ def main():
     # Dataset dir and filename
     dataset_dir = './data'
     dataset = CarRacingDataModule(dataset_dir , batch_size, obs_horizon, pred_horizon )
-    dataset.setup( name='TestingActions_dataset_5_episodes_3_modes.zarr.zip' )
+    dataset.setup( name='Sinusoidal_dataset_5_episodes.zarr.zip' )
     test_dataloaders = dataset.val_dataloader()
 
     # =========== Pytorch Lightning Trainer  ===========

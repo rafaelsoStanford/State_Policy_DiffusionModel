@@ -31,7 +31,7 @@ class Diffusion(pl.LightningModule):
         super().__init__()
 
         self.save_hyperparameters()
-        self.date = datetime.today().strftime('%Y-%m-%d-%H')
+        self.date = datetime.today().strftime('%Y_%m_%d_%H-%M-%S')
 # ==================== Init ====================
     # --------------------- Diffusion params ---------------------
         self.obs_horizon = obs_horizon
@@ -73,7 +73,6 @@ class Diffusion(pl.LightningModule):
                                     time_dim = 256 # Embedding dimension for time (t) of the current denoising step
                                 )
 
-
         ### Define model which will be a simplifed 1D UNet
         if vision_encoder == 'resnet18':
             print("Loading Resnet18")
@@ -110,7 +109,6 @@ class Diffusion(pl.LightningModule):
         loss = self.onepass(batch, batch_idx, mode="validation")
         self.log("val_loss",loss,  sync_dist=True)
         return loss
-
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -195,9 +193,7 @@ class Diffusion(pl.LightningModule):
 
             for t in reversed(range(0,self.noise_steps)): # t ranges from 999 to 0
                 x_t =  self.p_reverseProcess(obs_cond,  x_t,  t)
-
                 x_t = self.add_constraints(x_t, x_0)
-                
                 sampling_history.append(x_t.squeeze().detach().cpu().numpy())
             
             self.plt_toVideo(
@@ -378,32 +374,38 @@ class Diffusion(pl.LightningModule):
             plt.close('all')
 
         def plot_actions():
-            fig2, (ax1, ax2, ax3) = plt.subplots(1, 3)
-            ax1.plot(actions_groundtruth[:, 0])
-            ax2.plot(actions_groundtruth[ :, 1])
-            ax3.plot(actions_groundtruth[ :, 2])
-            inpaint_start = 0
-            inpaint_end = self.inpaint_horizon
-            ax1.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
-            ax1.axvspan(inpaint_end, sampling_actions.shape[1], alpha=0.2, color='green')
+            fig2, ax1 = plt.subplots()
+
+
+
             def animate_actions(frame):
+                fig2.clf()
 
-
+                plt.plot(actions_groundtruth[:, 0])
+                # ax2.plot(actions_groundtruth[ :, 1])
+                # ax3.plot(actions_groundtruth[ :, 2])
+                inpaint_start = 0
+                inpaint_end = self.inpaint_horizon
+                plt.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
+                plt.axvspan(inpaint_end, sampling_actions.shape[1], alpha=0.2, color='green')
                 #ax1.plot(sampling_actions[frame, :, 0])
-                ax1.scatter(np.arange(sampling_actions.shape[1]), sampling_actions[frame,:,0] , c='r', s=10)
+                plt.scatter(np.arange(sampling_actions.shape[1]), sampling_actions[frame,:,0] , c='r', s=10)
 
-                # ax2.plot(sampling_actions[frame, :, 1])
+                
                 
 
                 # ax3.plot(sampling_actions[frame, :, 2])
-                
+                plt.grid()
+                plt.ylim(-1.5, 1.5)
 
             fig2.animation = FuncAnimation(fig2, animate_actions, frames=self.noise_steps, interval=20, repeat=False)
             fig2.animation.save('./animations/' + self.date + 'animation_actions.gif', writer='pillow')
             print("Animation saved")
             plt.close('all')
-        plot_positions()
+
         plot_actions()
+        plot_positions()
+
 
 
         # sampling_positions = np.array(sampling_history)[:, :, :2] # (1000, 45 , 2)
