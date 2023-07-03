@@ -1,8 +1,11 @@
 import numpy as np
+import os
 import pickle
 import zarr
 import torch
 import matplotlib.pyplot as plt
+from torch.utils.data import DataLoader, random_split
+import pytorch_lightning as pl
 
 def visualize_batch(batch):
     print("Visualizing Batch and Data structure")
@@ -180,13 +183,32 @@ class CarRacingDataset(torch.utils.data.Dataset):
         nsample_centered = sample_normalized - translation_vec
         nsample['position'] = nsample_centered / 2.0
 
-
-
-        # position_sample = nsample['position']
-        # translation_vec = position_sample[0,:]
-        # position_sample_centered = position_sample - translation_vec
-        # stats = get_data_stats(position_sample_centered)
-        # position_sample_normalized = normalize_data(position_sample_centered, stats)
-        # nsample['position'] = position_sample_normalized 
-
         return nsample
+
+# =========== data loader module ===========
+# data module
+class CarRacingDataModule(pl.LightningDataModule):
+    def __init__(self, batch_size,  data_dir: str = "path/to/dir" , T_obs=4, T_pred=8 , T_act =1):
+        super().__init__()
+        self.data_dir = data_dir
+        self.batch_size = batch_size
+        self.T_obs = T_obs
+        self.T_pred = T_pred
+        self.T_act = T_act
+
+        self.data_train = None
+        self.data_val = None
+
+    def setup(self, name: str = None):
+        # ----- CarRacingDataset is a Dataloader file, takes care of normalization and such-----
+        self.data_full = CarRacingDataset(  dataset_path= os.path.join(self.data_dir, name),
+                                            pred_horizon=self.T_pred,
+                                            obs_horizon=self.T_obs,
+                                            action_horizon=self.T_act)
+        self.data_train, self.data_val = random_split(self.data_full, [int(len(self.data_full)*0.8), len(self.data_full) - int(len(self.data_full)*0.8)])
+
+    def train_dataloader(self):
+        return DataLoader(self.data_train, batch_size=self.batch_size, shuffle=True, num_workers=4)
+
+    def val_dataloader(self):
+        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=False, num_workers=4)

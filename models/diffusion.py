@@ -1,21 +1,17 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.cm import get_cmap
-from matplotlib.animation import FuncAnimation
 
 import torch
 import torch.nn as nn
-from PIL import Image
-import io
-from datetime import datetime
 import pytorch_lightning as pl
 import os
+import numpy as np
+from datetime import datetime
 
 # Loading modules
 from models.Unet_FiLmLayer import *
 from models.simple_Unet import * 
 from models.encoder.autoencoder import *
 from utils.print_utils import *
+from utils.plot_utils import *
 
 class Diffusion(pl.LightningModule):
     def __init__(self, noise_steps=1000
@@ -38,7 +34,7 @@ class Diffusion(pl.LightningModule):
         self.observation_dim = observation_dim
         self.prediction_dim = prediction_dim
         self.noise_steps = noise_steps
-        self.NoiseScheduler = linear_beta_schedule
+        self.NoiseScheduler = linear_beta_schedule_v2
 
         self.inpaint_horizon = inpaint_horizon
     # --------------------- Model Architecture ---------------------
@@ -88,6 +84,7 @@ class Diffusion(pl.LightningModule):
         if os.getenv("LOCAL_RANK", '0') == '0':
             print_hyperparameters(
             obs_horizon, pred_horizon, observation_dim, prediction_dim, noise_steps, inpaint_horizon, model, learning_rate, vision_encoder)
+            # print("Model Architecture: ", self.noise_estimator)
 
 # ==================== Training ====================
     def training_step(self, batch, batch_idx):
@@ -148,14 +145,12 @@ class Diffusion(pl.LightningModule):
         loss = self.loss(noise, noise_estimated) #MSE Loss
         return loss
     
-    # ---------------------- Sampling --------------------------------
+# ==================== Sampling ====================
     def sample(self, batch, batch_idx, mode):
-    
         # ---------------- Prepare Data ----------------
         x_0 , obs_cond = self.prepare_pred_cond_vectors(batch)
         x_0 = x_0[0,...].unsqueeze(0).unsqueeze(1)
         obs_cond = obs_cond[0,...].unsqueeze(0).unsqueeze(1)
-
         # Observations ie Past
         position_observation = obs_cond.squeeze()[:, :2].detach().cpu().numpy() 
         actions_observation = obs_cond.squeeze()[:, 2:].detach().cpu().numpy()
@@ -163,7 +158,6 @@ class Diffusion(pl.LightningModule):
         positions_groundtruth = x_0.squeeze()[:, :2].detach().cpu().numpy() #(20 , 2)
         actions_groundtruth = x_0.squeeze()[:, 2:].squeeze().detach().cpu().numpy() #(20 , 3)
     
-
         # ---------------- Plotting ----------------
         if mode == 'validation':
             x_0_predicted = self.p_reverseProcess_loop(x_cond = obs_cond, x_0 = x_0) # Only one batch is used to be visualized
@@ -173,7 +167,7 @@ class Diffusion(pl.LightningModule):
             actions_predicted = x_0_predicted.squeeze()[:, 2:].detach().cpu().numpy() #(20 , 3)
 
             # Plot to tensorboard
-            self.plt_toTensorboard(
+            plt_toTensorboard(self,
                 positions_predicted = positions_predicted,
                 positions_groundtruth = positions_groundtruth,
                 position_observation = position_observation,
@@ -192,7 +186,7 @@ class Diffusion(pl.LightningModule):
                 x_t = self.add_constraints(x_t, x_0)
                 sampling_history.append(x_t.squeeze().detach().cpu().numpy())
             
-            self.plt_toVideo(
+            plt_toVideo(self,
                 sampling_history,
                 positions_groundtruth = positions_groundtruth,
                 position_observation = position_observation,
@@ -201,12 +195,6 @@ class Diffusion(pl.LightningModule):
 
          # q(x_t | x_0)
     def q_forwardProcess(self, x_start, t, noise):
-        """
-        x_start: (batch_size, pred_horizon, pred_dim)
-        t: timestep (batch_size, 1)
-
-        returns: x_t (batch_size, pred_horizon, pred_dim)
-        """
         x_t = torch.sqrt(self.alphas_cumprod[t])[:,None,None,None] * x_start + torch.sqrt(1-self.alphas_cumprod[t])[:,None,None,None] * noise
         return x_t
 
@@ -237,7 +225,7 @@ class Diffusion(pl.LightningModule):
     def add_constraints(self, x_t , x_0):
         # Adding constraints by inpainting before denoising. 
         # Add all constaints here
-        x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :].clone() # inpaint the first datapoint (should be enough)
+        x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :].clone() # inpaint datapoints 
         # x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2].clone(), min=-1.0, max=1.0) # Enforce action limits (steering angle)
         # x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:].clone(), min=-1.0, max=1.0)   # Enforce action limits (acceleration and brake)
         return x_t
@@ -255,8 +243,8 @@ class Diffusion(pl.LightningModule):
         normalized_vel = batch['velocity'][:,:self.obs_horizon ,:]
 
         # ---------------- Encoding Image data ----------------
-        encoded_img = self.vision_encoder(normalized_img.flatten(end_dim=1)) # (B, 512)
-        image_features = encoded_img.reshape(*normalized_img.shape[:2],-1) # (B, t_0:t_obs , 512)
+        encoded_img = self.vision_encoder(normalized_img.flatten(end_dim=1)) # (B, 128)
+        image_features = encoded_img.reshape(*normalized_img.shape[:2],-1) # (B, t_0:t_obs , 128)
 
         # ---------------- Conditional vector ----------------
         # Concatenate position and action data and image features
@@ -269,149 +257,12 @@ class Diffusion(pl.LightningModule):
 
         # Adding past obervation as inpainting condition
         x_0 = torch.cat((obs_cond[:, -self.inpaint_horizon:, :5], x_0) , dim=1) # Concat in time dim
+
+        # ---------------- Assert cond dimensions compatible with model (important when preloading / changing conditioning data) ----------------
+        assert(obs_cond.shape[-1]*self.obs_horizon == self.noise_estimator.down1.cond_encoder[2].state_dict()['weight'].shape[1]) # Check if cond dim is correct
         return x_0 , obs_cond
 
-    
-    def plt_toTensorboard(self,
-        position_observation,   
-        positions_groundtruth,
-        positions_predicted,
-        actions_predicted,
-        actions_groundtruth,
-        actions_observation):
-        # ---------------- Plotting ----------------
-        writer = self.logger.experiment
-        niter  = self.global_step
-        plt.switch_backend('agg')
-        # ---------------- 2D Position Plot ----------------
-        fig = plt.figure()
-        fig.clf()
-        # Create a colormap for fading colors based on the number of timesteps
-        cmap = get_cmap('viridis', self.pred_horizon + self.inpaint_horizon)
-        # Create an array of indices from 0 to timesteps-1
-        indices = np.arange(self.pred_horizon + self.inpaint_horizon)
-        # Normalize the indices to the range [0, 1]
-        normalized_indices = indices / (self.pred_horizon + self.inpaint_horizon - 1)
-        # Create a color array using the colormap and normalized indices
-        colors = cmap(normalized_indices)
-
-        plt.plot(position_observation[:, 0], position_observation[:,1],'b.')
-        plt.plot(positions_groundtruth[self.inpaint_horizon:,0], positions_groundtruth[self.inpaint_horizon:,1],'g.')
-        plt.scatter(positions_predicted[:,0],positions_predicted[:,1],color=colors, s = 20)
-
-        plt.grid()
-        plt.axis('equal')
-
-        # Plot to tensorboard
-        plt2tsb(fig, writer, 'Predicted_path ' + self.date , niter)
-        
-        # ---------------- Action space Plotting ----------------
-        # Visualize the action data
-        inpaint_start = 0
-        inpaint_end = self.inpaint_horizon
-
-        fig2, (ax1, ax2, ax3) = plt.subplots(1, 3)
-        ax1.plot(actions_predicted[:,0])
-        ax1.plot(actions_groundtruth[:,0])
-        ax1.scatter(np.arange(actions_predicted.shape[0]), actions_predicted[:,0] , c='r', s=10)
-        ax1.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
-        ax1.axvspan(inpaint_end, actions_predicted.shape[0], alpha=0.2, color='green')
-
-        ax2.plot(actions_predicted[:,1])
-        ax2.plot(actions_groundtruth[:,1])
-        ax2.scatter(np.arange(actions_predicted.shape[0]), actions_predicted[:,1] , c='r', s=10)
-        ax2.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
-        ax2.axvspan(inpaint_end, actions_predicted.shape[0], alpha=0.2, color='green')
-
-        ax3.plot(actions_predicted[:,2])
-        ax3.plot(actions_groundtruth[:,2])
-        ax3.scatter(np.arange(actions_predicted.shape[0]), actions_predicted[:,2] , c='r', s=10)
-        ax3.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
-        ax3.axvspan(inpaint_end, actions_predicted.shape[0], alpha=0.2, color='green')
-        plt2tsb(fig2, writer, 'Action comparisons' + self.date , niter)
-
-        plt.close('all')
-
-
-    def plt_toVideo(self, 
-                    sampling_history,
-                    position_observation,   
-                    positions_groundtruth, 
-                    actions_groundtruth ,
-                    actions_observation):
-        # ---------------- Plotting ----------------
-        # 
-        sampling_positions = np.array(sampling_history)[:, :, :2]  # (1000, 45 , 2)
-        sampling_actions = np.array(sampling_history)[:, :, 2:]  # (1000, 45 , 3)
-
-        def plot_positions():
-            fig, ax = plt.subplots()
-
-            cmap = plt.get_cmap('viridis', self.pred_horizon + self.inpaint_horizon)
-            indices = np.arange(self.pred_horizon + self.inpaint_horizon)
-
-            def animate(frame):
-                fig.clf()
-                normalized_indices = indices / (self.pred_horizon + self.inpaint_horizon - 1)
-                colors = cmap(normalized_indices)
-
-                plt.plot(position_observation[:, 0], position_observation[:, 1], 'b.')
-                plt.plot(positions_groundtruth[self.inpaint_horizon:, 0], positions_groundtruth[self.inpaint_horizon:, 1], 'g.')
-                plt.scatter(sampling_positions[frame, :, 0], sampling_positions[frame, :, 1], color=colors, s=20)
-
-                plt.grid()
-                plt.axis('equal')
-                plt.xlim(-1.5, 1.5)
-                plt.ylim(-1.5, 1.5)
-
-            fig.animation = FuncAnimation(fig, animate, frames=self.noise_steps, interval=20, repeat=False)
-            fig.animation.save('./animations/' + self.date + 'animation_positions.gif', writer='pillow')
-            print("Animation saved")
-            plt.close('all')
-
-        def plot_actions():
-            fig2, ax1 = plt.subplots()
-
-            def animate_actions(frame):
-                fig2.clf()
-
-                plt.plot(actions_groundtruth[:, 0])
-                # ax2.plot(actions_groundtruth[ :, 1])
-                # ax3.plot(actions_groundtruth[ :, 2])
-                inpaint_start = 0
-                inpaint_end = self.inpaint_horizon
-                plt.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
-                plt.axvspan(inpaint_end, sampling_actions.shape[1], alpha=0.2, color='green')
-                #ax1.plot(sampling_actions[frame, :, 0])
-                plt.scatter(np.arange(sampling_actions.shape[1]), sampling_actions[frame,:,0] , c='r', s=10)
-
-                # ax3.plot(sampling_actions[frame, :, 2])
-                plt.grid()
-                plt.ylim(-1.5, 1.5)
-
-            fig2.animation = FuncAnimation(fig2, animate_actions, frames=self.noise_steps, interval=20, repeat=False)
-            fig2.animation.save('./animations/' + self.date + 'animation_actions.gif', writer='pillow')
-            print("Animation saved")
-            plt.close('all')
-
-        plot_actions()
-        plot_positions()
-
-# ==================== Utils ====================
-def plt2tsb(figure, writer, fig_name, niter):
-    # Save the plot to a BytesIO object
-    buf = io.BytesIO()
-    figure.savefig(buf, format='png')
-    buf.seek(0)
-
-    # Open the image and convert to RGB, then to Tensor
-    image = Image.open(buf).convert('RGB')
-    image_tensor = torch.tensor(np.array(image)).permute(2, 0, 1)
-
-    # Add the image to TensorBoard
-    writer.add_image(fig_name, image_tensor, niter)
-    buf.close()
-
+# ==================== Schedulers ====================
 def linear_beta_schedule(self, steps):
     """
     linear schedule, proposed in original ddpm paper
@@ -421,7 +272,17 @@ def linear_beta_schedule(self, steps):
     beta_end = scale * 0.02
     beta = torch.linspace(beta_start, beta_end, steps, dtype=torch.float32, device=self.device)
     return beta
-    #return torch.cat([torch.tensor([0],device=self.device), beta])   # at t=0, we want beta=0.0, zero noise added
+
+
+def linear_beta_schedule_v2(self, steps):
+    """
+    linear schedule, proposed in original ddpm paper
+    """
+    scale = 500 / steps
+    beta_start = scale * 0.0001
+    beta_end = scale * 0.02
+    beta = torch.linspace(beta_start, beta_end, steps, dtype=torch.float32, device=self.device)
+    return beta
 
 
 def cosine_beta_schedule(self, timesteps, s=0.008, dtype=torch.float32):

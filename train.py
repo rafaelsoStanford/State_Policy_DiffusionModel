@@ -2,7 +2,6 @@ import argparse
 import os
 
 import pytorch_lightning as pl
-from torch.utils.data import DataLoader, random_split
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging, ModelCheckpoint
@@ -10,10 +9,6 @@ from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAve
 from models.diffusion import *
 from utils.load_data import *
 from utils.print_utils import *
-
-# Only for Debugging
-VISUALIZE_BATCH = False
-VISUALIZE_MODEL = False
 
 # =========== parser function ===========
 def parse_arguments():
@@ -37,35 +32,6 @@ def parse_arguments():
     parser.add_argument('--dataset', type=str, default='Sinusoidal_dataset_5_episodes.zarr.zip', help='zarr.zip dataset filename')
     
     return parser.parse_args()
-
-
-# =========== data loader module ===========
-# data module
-class CarRacingDataModule(pl.LightningDataModule):
-    def __init__(self, batch_size,  data_dir: str = "path/to/dir" , T_obs=4, T_pred=8 , T_act =1):
-        super().__init__()
-        self.data_dir = data_dir
-        self.batch_size = batch_size
-        self.T_obs = T_obs
-        self.T_pred = T_pred
-        self.T_act = T_act
-
-        self.data_train = None
-        self.data_val = None
-
-    def setup(self, name: str = None):
-        # ----- CarRacingDataset is a Dataloader file, takes care of normalization and such-----
-        self.data_full = CarRacingDataset(  dataset_path= os.path.join(self.data_dir, name),
-                                            pred_horizon=self.T_pred,
-                                            obs_horizon=self.T_obs,
-                                            action_horizon=self.T_act)
-        self.data_train, self.data_val = random_split(self.data_full, [int(len(self.data_full)*0.8), len(self.data_full) - int(len(self.data_full)*0.8)])
-
-    def train_dataloader(self):
-        return DataLoader(self.data_train, batch_size=self.batch_size, shuffle=True, num_workers=4)
-
-    def val_dataloader(self):
-        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=False, num_workers=4)
 
 
 ############################
@@ -117,12 +83,6 @@ def main(args):
                     inpaint_horizon=inpaint_horizon,
     )
 
-    if VISUALIZE_BATCH:
-        visualize_batch(next(iter(train_dataloader)))
-    # Print model summary and architecture
-    if VISUALIZE_MODEL:
-        print(diffusion.noise_estimator)
-
     # ===========trainer===========
     # -----PL configs-----
     tensorboard = pl_loggers.TensorBoardLogger(save_dir="tb_logs/",name='',flush_secs=1)
@@ -138,6 +98,8 @@ def main(args):
                          callbacks=[early_stop_callback, checkpoint_callback],
                          logger=tensorboard, profiler="simple", val_check_interval=0.25, 
                          accumulate_grad_batches=1, gradient_clip_val=0.5) #, strategy='ddp_find_unused_parameters_true') 
+
+    # -----print model info------
     if os.getenv("LOCAL_RANK", '0') == '0':
         print_dataset_info(args,dataset_dir, dataset_name, train_dataloader, tensorboard)
 

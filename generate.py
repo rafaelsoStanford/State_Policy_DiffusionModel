@@ -53,7 +53,7 @@ def main():
     # Some params, dont know where to put them
     AMP = True
     n_epochs = 1
-    batch_size = 16
+    batch_size = 1
 
     # =========== Load Model ===========
     path_hyperparams = './tb_logs/version_463/hparams.yaml'
