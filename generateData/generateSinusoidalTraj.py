@@ -17,7 +17,7 @@ from datetime import datetime
 import argparse
 
 from utils.replay_buffer import ReplayBuffer
-from utils.car_racing import CarRacing
+from envs.car_racing import CarRacing
 from utils.functions import *
 
 global render_mode # Global variable to render the environment
