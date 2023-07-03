@@ -22,6 +22,7 @@ class Diffusion(pl.LightningModule):
                 , learning_rate = 1e-4
                 , model = 'UNet'
                 , vision_encoder = None
+                , noise_scheduler = 'linear_v2'
                 , inpaint_horizon = 10):
         super().__init__()
 
@@ -29,14 +30,21 @@ class Diffusion(pl.LightningModule):
         self.date = datetime.today().strftime('%Y_%m_%d_%H-%M-%S')
 # ==================== Init ====================
     # --------------------- Diffusion params ---------------------
+        self.NoiseScheduler = None
         self.obs_horizon = obs_horizon
         self.pred_horizon = pred_horizon
         self.observation_dim = observation_dim
         self.prediction_dim = prediction_dim
         self.noise_steps = noise_steps
-        self.NoiseScheduler = linear_beta_schedule_v2
-
         self.inpaint_horizon = inpaint_horizon
+
+        if noise_scheduler == 'linear_v2':
+            self.NoiseScheduler = linear_beta_schedule_v2
+        if noise_scheduler == 'linear':
+            self.NoiseScheduler = linear_beta_schedule
+        if noise_scheduler == 'cosine_beta_schedule':
+            self.NoiseScheduler = cosine_beta_schedule
+
     # --------------------- Model Architecture ---------------------
         if model == 'UNet_Film':
             print("Loading UNet with FiLm conditioning")

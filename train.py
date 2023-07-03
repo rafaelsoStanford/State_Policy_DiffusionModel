@@ -27,6 +27,7 @@ def parse_arguments():
     parser.add_argument('--cond_dim', type=int, default=128+2+3+2, help='Dimension of diffusion input state')
     parser.add_argument('--output_dim', type=int, default=5, help='Dimension of diffusion output state')
     parser.add_argument('--model', type=str, default='UNet_Film', help='String for choosing model architecture')
+    parser.add_argument('--noise_scheduler', type=str, default='linear_v2', help='String for choosing noise scheduler')
 
     parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
     parser.add_argument('--dataset', type=str, default='Sinusoidal_dataset_5_episodes.zarr.zip', help='zarr.zip dataset filename')
@@ -62,6 +63,7 @@ def main(args):
 
     # model architecture
     model = args.model
+    noise_scheduler = args.noise_scheduler
     
     # =========== Loading Data ===========
     # Load Dataset using Pytorch Lightning DataModule
@@ -81,6 +83,7 @@ def main(args):
                     model=model,
                     learning_rate=lr,
                     inpaint_horizon=inpaint_horizon,
+                    noise_scheduler=noise_scheduler,
     )
 
     # ===========trainer===========
