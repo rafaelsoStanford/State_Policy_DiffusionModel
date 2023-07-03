@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-plt.switch_backend('agg')
 from matplotlib.cm import get_cmap
 from matplotlib.animation import FuncAnimation
 
@@ -135,7 +134,6 @@ class Diffusion(pl.LightningModule):
         t = torch.randint(0, self.noise_steps, (B,), device=self.device).long() # Values from [0, 999]
         noise = torch.randn_like(x_0)
         x_noisy = self.q_forwardProcess(x_0, t, noise) # (B, 1 , pred_horizon, pred_dim)
-
         x_noisy = self.add_constraints(x_noisy, x_0)
 
         # ---------------- Estimate noise / Single Backward process ----------------
@@ -150,8 +148,6 @@ class Diffusion(pl.LightningModule):
         loss = self.loss(noise, noise_estimated) #MSE Loss
         return loss
     
-
-
     # ---------------------- Sampling --------------------------------
     def sample(self, batch, batch_idx, mode):
     
@@ -242,8 +238,8 @@ class Diffusion(pl.LightningModule):
         # Adding constraints by inpainting before denoising. 
         # Add all constaints here
         x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :].clone() # inpaint the first datapoint (should be enough)
-        x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2].clone(), min=-1.0, max=1.0) # Enforce action limits (steering angle)
-        x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:].clone(), min=-1.0, max=1.0)   # Enforce action limits (acceleration and brake)
+        # x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2].clone(), min=-1.0, max=1.0) # Enforce action limits (steering angle)
+        # x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:].clone(), min=-1.0, max=1.0)   # Enforce action limits (acceleration and brake)
         return x_t
 
     # ==================== Helper functions ====================
@@ -256,7 +252,7 @@ class Diffusion(pl.LightningModule):
         normalized_img = batch['image'][:,:self.obs_horizon ,:] 
         normalized_pos = batch['position'][:,:self.obs_horizon ,:]
         normalized_act = batch['action'][:,:self.obs_horizon ,:]
-        # normalized_vel = batch['velocity'][:,:self.obs_horizon ,:]
+        normalized_vel = batch['velocity'][:,:self.obs_horizon ,:]
 
         # ---------------- Encoding Image data ----------------
         encoded_img = self.vision_encoder(normalized_img.flatten(end_dim=1)) # (B, 512)
@@ -264,7 +260,7 @@ class Diffusion(pl.LightningModule):
 
         # ---------------- Conditional vector ----------------
         # Concatenate position and action data and image features
-        obs_cond = torch.cat([normalized_pos, normalized_act , image_features], dim=-1) # (B, t_0:t_obs, 512 + 3 + 2)
+        obs_cond = torch.cat([normalized_pos, normalized_act,normalized_vel, image_features], dim=-1) # (B, t_0:t_obs, 512 + 3 + 2)
 
         # ---------------- Preparing Prediction data (acts as ground truth) ----------------
         x_0_pos = batch['position'][:,self.obs_horizon: ,:] # (B, t_obs:t_pred , 2)
@@ -286,7 +282,7 @@ class Diffusion(pl.LightningModule):
         # ---------------- Plotting ----------------
         writer = self.logger.experiment
         niter  = self.global_step
-
+        plt.switch_backend('agg')
         # ---------------- 2D Position Plot ----------------
         fig = plt.figure()
         fig.clf()
@@ -332,7 +328,6 @@ class Diffusion(pl.LightningModule):
         ax3.scatter(np.arange(actions_predicted.shape[0]), actions_predicted[:,2] , c='r', s=10)
         ax3.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
         ax3.axvspan(inpaint_end, actions_predicted.shape[0], alpha=0.2, color='green')
-
         plt2tsb(fig2, writer, 'Action comparisons' + self.date , niter)
 
         plt.close('all')
@@ -344,7 +339,8 @@ class Diffusion(pl.LightningModule):
                     positions_groundtruth, 
                     actions_groundtruth ,
                     actions_observation):
-        
+        # ---------------- Plotting ----------------
+        # 
         sampling_positions = np.array(sampling_history)[:, :, :2]  # (1000, 45 , 2)
         sampling_actions = np.array(sampling_history)[:, :, 2:]  # (1000, 45 , 3)
 
@@ -376,8 +372,6 @@ class Diffusion(pl.LightningModule):
         def plot_actions():
             fig2, ax1 = plt.subplots()
 
-
-
             def animate_actions(frame):
                 fig2.clf()
 
@@ -391,9 +385,6 @@ class Diffusion(pl.LightningModule):
                 #ax1.plot(sampling_actions[frame, :, 0])
                 plt.scatter(np.arange(sampling_actions.shape[1]), sampling_actions[frame,:,0] , c='r', s=10)
 
-                
-                
-
                 # ax3.plot(sampling_actions[frame, :, 2])
                 plt.grid()
                 plt.ylim(-1.5, 1.5)
@@ -405,81 +396,6 @@ class Diffusion(pl.LightningModule):
 
         plot_actions()
         plot_positions()
-
-
-
-        # sampling_positions = np.array(sampling_history)[:, :, :2] # (1000, 45 , 2)
-        # sampling_actions = np.array(sampling_history)[:, :, 2:] # (1000, 45 , 3)
-
-
-        # # ---------------- Plotting position points ----------------
-        # # Create a figure and axis
-        # fig, ax = plt.subplots()
-
-        # # Create a colormap for fading colors based on the number of timesteps
-        # cmap = plt.get_cmap('viridis', self.pred_horizon + self.inpaint_horizon)
-
-        # # Create an array of indices from 0 to timesteps-1
-        # indices = np.arange(self.pred_horizon + self.inpaint_horizon)
-
-        # def animate(frame):
-        #     fig.clf()
-        #     # Normalize the indices to the range [0, 1]
-        #     normalized_indices = indices / (self.pred_horizon + self.inpaint_horizon - 1)
-        #     # Create a color array using the colormap and normalized indices
-        #     colors = cmap(normalized_indices)
-
-        #     plt.plot(position_observation[:, 0], position_observation[:, 1], 'b.')
-        #     plt.plot(positions_groundtruth[self.inpaint_horizon:, 0], positions_groundtruth[self.inpaint_horizon:, 1], 'g.')
-        #     plt.scatter(sampling_positions[frame, :, 0], sampling_positions[frame, :, 1], color=colors, s=20)
-
-        #     plt.grid()
-        #     plt.axis('equal')
-        #     plt.xlim(-1.5, 1.5)
-        #     plt.ylim(-1.5, 1.5)
-        
-        
-        # # Create an animation using the FuncAnimation class
-        # animation = FuncAnimation(fig, animate, frames=self.noise_steps, interval=20, repeat=False)
-        # # Save the animation as a GIF
-        # animation.save('./animations/' + self.date +'animation_positions.gif', writer='pillow')
-
-        # print("Animation saved")
-
-        # # ---------------- Plotting action points ----------------
-        # fig2, (ax1, ax2, ax3) = plt.subplots(1, 3)
-        # def annimate_actions(frame):
-        #     # ---------------- Action space Plotting ----------------
-        #     # Visualize the action data
-        #     inpaint_start = 0
-        #     inpaint_end = self.inpaint_horizon
-
-        #     ax1.plot(sampling_actions[frame, :,0])
-        #     ax1.plot(actions_groundtruth[:,0])
-        #     # ax1.scatter(np.arange(sampling_actions.shape[1]), sampling_actions[frame,:,0] , c='r', s=10)
-        #     # ax1.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
-        #     # ax1.axvspan(inpaint_end, sampling_actions.shape[1], alpha=0.2, color='green')
-
-        #     ax2.plot(sampling_actions[frame,:,1])
-        #     ax2.plot(actions_groundtruth[:,1])
-        #     # ax2.scatter(np.arange(sampling_actions.shape[1]), sampling_actions[frame,:,1] , c='r', s=10)
-        #     # ax2.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
-        #     # ax2.axvspan(inpaint_end, sampling_actions.shape[1], alpha=0.2, color='green')
-
-        #     ax3.plot(sampling_actions[frame,:,2])
-        #     ax3.plot(actions_groundtruth[:,2])
-        #     # ax3.scatter(np.arange(sampling_actions.shape[1]), sampling_actions[frame,:,2] , c='r', s=10)
-        #     # ax3.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
-        #     # ax3.axvspan(inpaint_end, sampling_actions.shape[1], alpha=0.2, color='green')
-
-        # # Create an animation using the FuncAnimation class
-        # animation = FuncAnimation(fig2, annimate_actions, frames=self.noise_steps, interval=20, repeat=False)
-        # animation.save('./animations/' + self.date +'animation_actions.gif', writer='pillow')
-
-        # print("Animation saved")
-        # # Show the final plot
-        # plt.show()
-
 
 # ==================== Utils ====================
 def plt2tsb(figure, writer, fig_name, niter):

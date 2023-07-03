@@ -29,7 +29,7 @@ def parse_arguments():
     parser.add_argument('--inpaint_horizon', type=int, default=5, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
     parser.add_argument('--noise_steps', type=int, default=1000, help='Denoising steps')
     
-    parser.add_argument('--cond_dim', type=int, default=128+2+3, help='Dimension of diffusion input state')
+    parser.add_argument('--cond_dim', type=int, default=128+2+3+2, help='Dimension of diffusion input state')
     parser.add_argument('--output_dim', type=int, default=5, help='Dimension of diffusion output state')
     parser.add_argument('--model', type=str, default='UNet_Film', help='String for choosing model architecture')
 

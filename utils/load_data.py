@@ -118,14 +118,13 @@ class CarRacingDataset(torch.utils.data.Dataset):
         # float32, [0,1], (N,96,96,3)
         train_image_data = dataset_root['data']['img'][:]
         train_image_data = np.moveaxis(train_image_data, -1,1)
-        # (N,3,96,96) Meaning N images, 3 channels, 96x96 pixels
-        #train_actions_data = dataset_root['data']['action'][:] # (N,3)
+
 
         # (N, D)
         train_data = {
             # Create Prediction Targets
             'position': dataset_root['data']['position'][:], # (T,2)
-#            'velocities_pred': dataset_root['data']['velocity'][:] # (T,2)
+            'velocity': dataset_root['data']['velocity'][:], # (T,2)
             'action': dataset_root['data']['action'][:] #(T,3)
         }
         episode_ends = dataset_root['meta']['episode_ends'][:]
@@ -148,6 +147,7 @@ class CarRacingDataset(torch.utils.data.Dataset):
 
         self.normalized_train_data['image'] = train_image_data # [:,: , :80, :80] # Assumed to be already normalized, cropped to 80x80 removing the black border
         self.normalized_train_data['action'] = normalized_train_data['action'] # train_data['action'] # All action space values are constrained to [-1,1]
+        self.normalized_train_data['velocity'] = normalized_train_data['velocity'] # train_data['velocity'] # All velocity values are constrained to [-1,1]
         self.normalized_train_data['position'] = train_data['position'] 
         self.indices = indices
         # self.stats = stats
