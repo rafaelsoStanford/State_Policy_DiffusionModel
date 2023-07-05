@@ -30,20 +30,13 @@ class Diffusion(pl.LightningModule):
         self.date = datetime.today().strftime('%Y_%m_%d_%H-%M-%S')
 # ==================== Init ====================
     # --------------------- Diffusion params ---------------------
+        self.noise_steps = self.hparams.noise_steps
         self.NoiseScheduler = None
         self.obs_horizon = obs_horizon
         self.pred_horizon = pred_horizon
         self.observation_dim = observation_dim
         self.prediction_dim = prediction_dim
-        self.noise_steps = noise_steps
         self.inpaint_horizon = inpaint_horizon
-
-        if noise_scheduler == 'linear_v2':
-            self.NoiseScheduler = linear_beta_schedule_v2
-        if noise_scheduler == 'linear':
-            self.NoiseScheduler = linear_beta_schedule
-        if noise_scheduler == 'cosine_beta_schedule':
-            self.NoiseScheduler = cosine_beta_schedule
 
     # --------------------- Model Architecture ---------------------
         if model == 'UNet_Film':
@@ -54,6 +47,13 @@ class Diffusion(pl.LightningModule):
             self.model = UNet
 
     # --------------------- Noise Schedule Params---------------------
+        if noise_scheduler == 'linear_v2':
+            self.NoiseScheduler = linear_beta_schedule_v2
+        if noise_scheduler == 'linear':
+            self.NoiseScheduler = linear_beta_schedule
+        if noise_scheduler == 'cosine_beta_schedule':
+            self.NoiseScheduler = cosine_beta_schedule
+
         betas =  self.NoiseScheduler(self, noise_steps)
         alphas = 1. - betas
         alphas_cumprod = torch.cumprod(alphas, dim=0)
@@ -104,12 +104,12 @@ class Diffusion(pl.LightningModule):
 # ==================== Testing ====================
     def test_step(self, batch, batch_idx):
         if batch_idx == 0:
-            self.sample(batch, batch_idx, mode="test")
+            self.sample(batch, mode="test")
 
 # ==================== Validation ====================    
     def validation_step(self, batch, batch_idx):
         if batch_idx == 0:
-            self.sample(batch, batch_idx, mode="validation")
+            self.sample(batch, mode="validation")
         loss = self.onepass(batch, batch_idx, mode="validation")
         self.log("val_loss",loss,  sync_dist=True)
         return loss
@@ -154,7 +154,7 @@ class Diffusion(pl.LightningModule):
         return loss
     
 # ==================== Sampling ====================
-    def sample(self, batch, batch_idx, mode):
+    def sample(self, batch, mode):
         # ---------------- Prepare Data ----------------
         x_0 , obs_cond = self.prepare_pred_cond_vectors(batch)
         x_0 = x_0[0,...].unsqueeze(0).unsqueeze(1)
@@ -189,7 +189,7 @@ class Diffusion(pl.LightningModule):
             sampling_history = []
             x_t = torch.rand(1, 1, self.pred_horizon + self.inpaint_horizon, self.prediction_dim, device=self.device)
 
-            for t in reversed(range(0,self.noise_steps)): # t ranges from 999 to 0
+            for t in reversed(range(0,200)): # t ranges from 999 to 0
                 x_t =  self.p_reverseProcess(obs_cond,  x_t,  t)
                 x_t = self.add_constraints(x_t, x_0)
                 sampling_history.append(x_t.squeeze().detach().cpu().numpy())

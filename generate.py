@@ -54,20 +54,20 @@ def main():
     AMP = True
     n_epochs = 1
     batch_size = 1
+    denoising_steps = 100
 
     # =========== Load Model ===========
-    path_hyperparams = './tb_logs/version_463/hparams.yaml'
-    path_checkpoint = './tb_logs/version_463/checkpoints/epoch=38.ckpt'
+    path_hyperparams = './tb_logs/version_506/hparams.yaml'
+    path_checkpoint = './tb_logs/version_506/checkpoints/epoch=37.ckpt'
 
     model_params = fetch_hyperparams_from_yaml(path_hyperparams)
     model = Diffusion.load_from_checkpoint(
         path_checkpoint,
-        hparams_file=path_hyperparams
+        hparams_file=path_hyperparams,
     )
     model.eval() 
 
     # ===========Parameters===========
-    noise_steps = model_params['noise_steps']
     obs_horizon = model_params['obs_horizon']
     pred_horizon = model_params['pred_horizon']
 
