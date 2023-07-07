@@ -16,34 +16,6 @@ def fetch_hyperparams_from_yaml(file_path):
         hyperparams = yaml.safe_load(file)
     return hyperparams
 
-# =========== data loader module ===========
-# data module
-class CarRacingDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "path/to/dir", batch_size: int = 16 , T_obs=4, T_pred=8 , T_act =1):
-        super().__init__()
-        self.data_dir = data_dir
-        self.batch_size = batch_size
-        self.T_obs = T_obs
-        self.T_pred = T_pred
-        self.T_act = T_act
-
-        self.data_train = None
-        self.data_val = None
-
-    def setup(self, name: str = None):
-        # ----- CarRacingDataset is a Dataloader file, takes care of normalization and such-----
-        self.data_full = CarRacingDataset(  dataset_path= os.path.join(self.data_dir, name),
-                                            pred_horizon=self.T_pred,
-                                            obs_horizon=self.T_obs,
-                                            action_horizon=self.T_act)
-        self.data_train, self.data_val = random_split(self.data_full, [int(len(self.data_full)*0.8), len(self.data_full) - int(len(self.data_full)*0.8)])
-
-    def train_dataloader(self):
-        return DataLoader(self.data_train, batch_size=self.batch_size, shuffle=True, num_workers=4)
-
-    def val_dataloader(self):
-        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=False, num_workers=4)
-
 
 ############################
 #========== MAIN ===========
@@ -54,16 +26,17 @@ def main():
     AMP = True
     n_epochs = 1
     batch_size = 1
-    denoising_steps = 100
+    denoising_steps = 500
 
     # =========== Load Model ===========
-    path_hyperparams = './tb_logs/version_506/hparams.yaml'
-    path_checkpoint = './tb_logs/version_506/checkpoints/epoch=37.ckpt'
+    path_hyperparams = './tb_logs/version_513/hparams.yaml'
+    path_checkpoint = './tb_logs/version_513/checkpoints/epoch=45.ckpt'
 
     model_params = fetch_hyperparams_from_yaml(path_hyperparams)
     model = Diffusion.load_from_checkpoint(
         path_checkpoint,
         hparams_file=path_hyperparams,
+        denoising_steps = denoising_steps,
     )
     model.eval() 
 
@@ -74,7 +47,7 @@ def main():
     # =========== Dataloader ===========
     # Dataset dir and filename
     dataset_dir = './data'
-    dataset = CarRacingDataModule(dataset_dir , batch_size, obs_horizon, pred_horizon )
+    dataset = CarRacingDataModule( batch_size, dataset_dir, obs_horizon, pred_horizon ,seed=42)
     dataset.setup( name='Sinusoidal_dataset_5_episodes.zarr.zip' )
     test_dataloaders = dataset.val_dataloader()
 

@@ -106,7 +106,8 @@ class CarRacingDataset(torch.utils.data.Dataset):
                  dataset_path: str,
                  pred_horizon: int,
                  obs_horizon: int,
-                 action_horizon: int):
+                 action_horizon: int,
+                 ):
         
         self.obs_horizon = obs_horizon
         self.pred_horizon = pred_horizon
@@ -188,7 +189,7 @@ class CarRacingDataset(torch.utils.data.Dataset):
 # =========== data loader module ===========
 # data module
 class CarRacingDataModule(pl.LightningDataModule):
-    def __init__(self, batch_size,  data_dir: str = "path/to/dir" , T_obs=4, T_pred=8 , T_act =1):
+    def __init__(self, batch_size,  data_dir: str = "path/to/dir" , T_obs=4, T_pred=8 , T_act =1, seed=None):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
@@ -198,15 +199,19 @@ class CarRacingDataModule(pl.LightningDataModule):
 
         self.data_train = None
         self.data_val = None
+        self.seed = seed
 
     def setup(self, name: str = None):
         # ----- CarRacingDataset is a Dataloader file, takes care of normalization and such-----
         self.data_full = CarRacingDataset(  dataset_path= os.path.join(self.data_dir, name),
                                             pred_horizon=self.T_pred,
                                             obs_horizon=self.T_obs,
-                                            action_horizon=self.T_act)
-        self.data_train, self.data_val = random_split(self.data_full, [int(len(self.data_full)*0.8), len(self.data_full) - int(len(self.data_full)*0.8)])
-
+                                            action_horizon=self.T_act,
+                                            )
+        if self.seed:
+            self.data_train, self.data_val = random_split(self.data_full, [int(len(self.data_full)*0.8), len(self.data_full) - int(len(self.data_full)*0.8)], generator=torch.Generator().manual_seed(self.seed))
+        else:
+            self.data_train, self.data_val = random_split(self.data_full, [int(len(self.data_full)*0.8), len(self.data_full) - int(len(self.data_full)*0.8)])
     def train_dataloader(self):
         return DataLoader(self.data_train, batch_size=self.batch_size, shuffle=True, num_workers=4)
 

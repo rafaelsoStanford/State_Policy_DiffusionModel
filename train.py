@@ -27,7 +27,7 @@ def parse_arguments():
     parser.add_argument('--cond_dim', type=int, default=128+2+3+2, help='Dimension of diffusion input state')
     parser.add_argument('--output_dim', type=int, default=5, help='Dimension of diffusion output state')
     parser.add_argument('--model', type=str, default='UNet_Film', help='String for choosing model architecture')
-    parser.add_argument('--noise_scheduler', type=str, default='linear_v2', help='String for choosing noise scheduler')
+    parser.add_argument('--noise_scheduler', type=str, default='linear', help='String for choosing noise scheduler')
 
     parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
     parser.add_argument('--dataset', type=str, default='Sinusoidal_dataset_5_episodes.zarr.zip', help='zarr.zip dataset filename')
