@@ -13,6 +13,7 @@ from models.encoder.autoencoder import *
 from utils.print_utils import *
 from utils.plot_utils import *
 
+
 class Diffusion(pl.LightningModule):
     def __init__(self
                 , noise_steps=1000
@@ -238,21 +239,16 @@ class Diffusion(pl.LightningModule):
         # Adding constraints by inpainting before denoising. 
         # Add all constaints here
         x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :].clone() # inpaint datapoints 
-        # x_t[:, :, :, 2] = torch.clip(x_t[:, :, :, 2].clone(), min=-1.0, max=1.0) # Enforce action limits (steering angle)
-        # x_t[:, :, :, 3:] = torch.clip(x_t[:, :, :, 3:].clone(), min=-1.0, max=1.0)   # Enforce action limits (acceleration and brake)
         return x_t
 
     # ==================== Helper functions ====================
     def prepare_pred_cond_vectors(self, batch):
-        # Security check for corrupted data
-        assert(not torch.isnan(batch['position'][:,: self.obs_horizon ,:]).any())
-        assert(not torch.isnan(batch['action'][:,self.obs_horizon : ,:]).any())
 
         # ---------------- Preparing Observation data ----------------
-        normalized_img = batch['image'][:,:self.obs_horizon ,:] 
-        normalized_pos = batch['position'][:,:self.obs_horizon ,:]
-        normalized_act = batch['action'][:,:self.obs_horizon ,:]
-        normalized_vel = batch['velocity'][:,:self.obs_horizon ,:]
+        normalized_img              = normalize_image( batch['image'][:,:self.obs_horizon ,:] ) 
+        normalized_pos, translation_vec,  pos_stats   = normalize_position( batch['position'][:,:self.obs_horizon ,:]  )
+        normalized_act, act_stats   = normalize_action( batch['action'][:,:self.obs_horizon,:]  )
+        normalized_vel, _           = normalize_velocity( batch['velocity'][:,:self.obs_horizon ,:]  )
 
         # ---------------- Encoding Image data ----------------
         encoded_img = self.vision_encoder(normalized_img.flatten(end_dim=1)) # (B, 128)
@@ -263,16 +259,106 @@ class Diffusion(pl.LightningModule):
         obs_cond = torch.cat([normalized_pos, normalized_act,normalized_vel, image_features], dim=-1) # (B, t_0:t_obs, 512 + 3 + 2)
 
         # ---------------- Preparing Prediction data (acts as ground truth) ----------------
-        x_0_pos = batch['position'][:,self.obs_horizon: ,:] # (B, t_obs:t_pred , 2)
-        x_0_act = batch['action'][:, self.obs_horizon: ,:] # (B, t_obs:t_pred, 3)
+        x_0_pos = normalize_batch(batch['position'][:,self.obs_horizon: ,:], pos_stats) # (B, t_obs:t_pred , 2)
+        x_0_pos = (x_0_pos - translation_vec[:, None, :]) / 2.0 # Normalizing to the same frame as the observation data
+        x_0_act = normalize_batch(batch['action'][:, self.obs_horizon: ,:], act_stats) # (B, t_obs:t_pred, 3)
         x_0 = torch.cat([x_0_pos, x_0_act], dim=-1) # (B, t_obs:t_pred, 5)
-
+        
+        
         # Adding past obervation as inpainting condition
         x_0 = torch.cat((obs_cond[:, -self.inpaint_horizon:, :5], x_0) , dim=1) # Concat in time dim
 
         # ---------------- Assert cond dimensions compatible with model (important when preloading / changing conditioning data) ----------------
         assert(obs_cond.shape[-1]*self.obs_horizon == self.noise_estimator.down1.cond_encoder[2].state_dict()['weight'].shape[1]) # Check if cond dim is correct
         return x_0 , obs_cond
+
+
+
+
+
+def get_data_stats(data: torch.Tensor):
+    data = data.reshape(-1,data.shape[-1])
+    min, _ =  torch.min(data, axis=0)
+    max, _ =  torch.max(data, axis=0)
+    stats = {
+        'min': min,
+        'max': max
+    }
+    return stats
+
+def normalize_data(data, stats):
+    # nomalize to [0,1]
+    ndata = (data - stats['min']) / (stats['max'] - stats['min'])
+    # normalize to [-1, 1]
+    ndata = ndata * 2 - 1
+    return ndata
+
+def normalize_batch(data, stats):
+    # stats has B elements
+    ndata = torch.zeros_like(data)
+    for b, d in enumerate(data):
+        ndata[b,...] = normalize_data(d, stats[b])
+    return ndata
+
+def normalize_image(image):
+    """
+    Normalize image data assuming values are already between 0 and 1.
+    """
+    assert (image.max() <= 1.0 and image.min() >= 0.0)
+    return image
+
+def normalize_position(position: torch.Tensor):
+    """
+    Normalize position data by subtracting the mean and dividing by 2.
+    position: (B, T, 2)
+    """
+    stats_list = []
+    position_normalized = torch.zeros_like(position)
+    translation_to_zero = torch.zeros((position.size(0), 2), device=position.device)
+    for b, data in enumerate(position):
+        stats = get_data_stats(data)  # Assuming get_data_stats function is defined
+        sample_normalized = normalize_data(data, stats)
+        translation_to_zero[b] = sample_normalized[0,:]
+        sample_normalized = (sample_normalized - translation_to_zero[b]) / 2.0
+        stats_list.append(stats)
+        position_normalized[b] = sample_normalized
+    assert(not torch.isnan(position_normalized).any())
+    return position_normalized, translation_to_zero, stats_list
+
+def normalize_action(action):
+    """
+    Normalize action data using the statistics from get_data_stats function.
+    action: (B, T, ...)
+    """
+    stats_list = []
+    action_normalized = torch.zeros_like(action)
+    for b in range(action.size(0)):
+        data = action[b]
+        stats = get_data_stats(data)  # Assuming get_data_stats function is defined
+        data_normalized = normalize_data(data, stats)  # Assuming normalize_data function is defined
+        action_normalized[b] = data_normalized
+        stats_list.append(stats)
+    assert(not torch.isnan(action_normalized).any())
+    return action_normalized, stats_list
+
+def normalize_velocity(velocity):
+    """
+    Normalize velocity data using the statistics from get_data_stats function.
+    velocity: (B, T, ...)
+    """
+    stats_list = []
+    velocity_normalized = torch.zeros_like(velocity)
+    for b in range(velocity.size(0)):
+        data = velocity[b]
+        stats = get_data_stats(data)  # Assuming get_data_stats function is defined
+        data_normalized = normalize_data(data, stats)  # Assuming normalize_data function is defined
+        velocity_normalized[b] = data_normalized
+        stats_list.append(stats)
+    assert(not torch.isnan(velocity_normalized).any())
+    return velocity_normalized, stats_list
+
+
+
 
 # ==================== Schedulers ====================
 def linear_beta_schedule(self, steps):

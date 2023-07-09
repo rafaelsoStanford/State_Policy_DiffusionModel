@@ -56,7 +56,6 @@ def main(args):
     cond_dim = args.cond_dim
     output_dim = args.output_dim
 
-
     # Dataset dir and filename
     dataset_dir = args.dataset_dir
     dataset_name = args.dataset
