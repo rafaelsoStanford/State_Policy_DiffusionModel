@@ -247,8 +247,8 @@ class Diffusion(pl.LightningModule):
         # ---------------- Preparing Observation data ----------------
         normalized_img              = normalize_image( batch['image'][:,:self.obs_horizon ,:] ) 
         normalized_pos, translation_vec,  pos_stats   = normalize_position( batch['position'][:,:self.obs_horizon ,:]  )
-        normalized_act, act_stats   = normalize_action( batch['action'][:,:self.obs_horizon,:]  )
-        normalized_vel, _           = normalize_velocity( batch['velocity'][:,:self.obs_horizon ,:]  )
+        normalized_act   = normalize_action( batch['action'][:,:self.obs_horizon,:]  )
+        normalized_vel          = normalize_velocity( batch['velocity'][:,:self.obs_horizon ,:]  )
 
         # ---------------- Encoding Image data ----------------
         encoded_img = self.vision_encoder(normalized_img.flatten(end_dim=1)) # (B, 128)
@@ -261,9 +261,9 @@ class Diffusion(pl.LightningModule):
         # ---------------- Preparing Prediction data (acts as ground truth) ----------------
         x_0_pos = normalize_batch(batch['position'][:,self.obs_horizon: ,:], pos_stats) # (B, t_obs:t_pred , 2)
         x_0_pos = (x_0_pos - translation_vec[:, None, :]) / 2.0 # Normalizing to the same frame as the observation data
-        x_0_act = normalize_batch(batch['action'][:, self.obs_horizon: ,:], act_stats) # (B, t_obs:t_pred, 3)
+        x_0_act = normalize_action(batch['action'][:, self.obs_horizon: ,:]) # (B, t_obs:t_pred, 3)
         x_0 = torch.cat([x_0_pos, x_0_act], dim=-1) # (B, t_obs:t_pred, 5)
-        
+
         
         # Adding past obervation as inpainting condition
         x_0 = torch.cat((obs_cond[:, -self.inpaint_horizon:, :5], x_0) , dim=1) # Concat in time dim
@@ -271,9 +271,6 @@ class Diffusion(pl.LightningModule):
         # ---------------- Assert cond dimensions compatible with model (important when preloading / changing conditioning data) ----------------
         assert(obs_cond.shape[-1]*self.obs_horizon == self.noise_estimator.down1.cond_encoder[2].state_dict()['weight'].shape[1]) # Check if cond dim is correct
         return x_0 , obs_cond
-
-
-
 
 
 def get_data_stats(data: torch.Tensor):
@@ -288,7 +285,10 @@ def get_data_stats(data: torch.Tensor):
 
 def normalize_data(data, stats):
     # nomalize to [0,1]
-    ndata = (data - stats['min']) / (stats['max'] - stats['min'])
+    diffs = stats['max'] - stats['min']
+    if torch.any(diffs == 0): # Avoid division by zero
+        diffs[diffs == 0] = 1
+    ndata = (data - stats['min']) / diffs
     # normalize to [-1, 1]
     ndata = ndata * 2 - 1
     return ndata
@@ -326,36 +326,39 @@ def normalize_position(position: torch.Tensor):
     return position_normalized, translation_to_zero, stats_list
 
 def normalize_action(action):
-    """
-    Normalize action data using the statistics from get_data_stats function.
-    action: (B, T, ...)
-    """
-    stats_list = []
-    action_normalized = torch.zeros_like(action)
-    for b in range(action.size(0)):
-        data = action[b]
-        stats = get_data_stats(data)  # Assuming get_data_stats function is defined
-        data_normalized = normalize_data(data, stats)  # Assuming normalize_data function is defined
-        action_normalized[b] = data_normalized
-        stats_list.append(stats)
-    assert(not torch.isnan(action_normalized).any())
-    return action_normalized, stats_list
+    # Normalize action data assuming values are already between -1 and 1, when loaded by the dataloader.
+    assert (action.max() <= 1.0 and action.min() >= -1.0)
+    assert(not torch.isnan(action).any())
+    return action
+    # stats_list = []
+    # action_normalized = torch.zeros_like(action)
+    # for b, data in enumerate(action):
+    #     stats = get_data_stats(data)  # Assuming get_data_stats function is defined
+    #     data_normalized = normalize_data(data, stats)  # Assuming normalize_data function is defined
+    #     action_normalized[b] = data_normalized
+    #     stats_list.append(stats)
+    # assert(not torch.isnan(action_normalized).any())
+    # return action_normalized, stats_list
 
 def normalize_velocity(velocity):
-    """
-    Normalize velocity data using the statistics from get_data_stats function.
-    velocity: (B, T, ...)
-    """
-    stats_list = []
-    velocity_normalized = torch.zeros_like(velocity)
-    for b in range(velocity.size(0)):
-        data = velocity[b]
-        stats = get_data_stats(data)  # Assuming get_data_stats function is defined
-        data_normalized = normalize_data(data, stats)  # Assuming normalize_data function is defined
-        velocity_normalized[b] = data_normalized
-        stats_list.append(stats)
-    assert(not torch.isnan(velocity_normalized).any())
-    return velocity_normalized, stats_list
+    # Normalize velocity data assuming values are already between -1 and 1, done by the dataloader.
+    assert (velocity.max() <= 1.0 and velocity.min() >= -1.0)
+    assert(not torch.isnan(velocity).any())
+    return velocity
+    # """
+    # Normalize velocity data using the statistics from get_data_stats function.
+    # velocity: (B, T, ...)
+    # """
+    # stats_list = []
+    # velocity_normalized = torch.zeros_like(velocity)
+    # for b in range(velocity.size(0)):
+    #     data = velocity[b]
+    #     stats = get_data_stats(data)  # Assuming get_data_stats function is defined
+    #     data_normalized = normalize_data(data, stats)  # Assuming normalize_data function is defined
+    #     velocity_normalized[b] = data_normalized
+    #     stats_list.append(stats)
+    # assert(not torch.isnan(velocity_normalized).any())
+    # return velocity_normalized, stats_list
 
 
 
