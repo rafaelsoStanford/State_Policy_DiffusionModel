@@ -146,11 +146,13 @@ class CarRacingDataset(torch.utils.data.Dataset):
         # ========== Normalize Actions ============ 
         # normalized data to [-1,1], images are assumed to be normalized 
         stats = dict()
-        stats = get_data_stats(train_data['action'])
-        normalized_action_data = normalize_data(train_data['action'], stats)
-        stats = get_data_stats(train_data['velocity'])
-        normalized_velocity_data = normalize_data(train_data['velocity'], stats)
+        action_stats = get_data_stats(train_data['action'])
+        normalized_action_data = normalize_data(train_data['action'], action_stats)
+        vel_stats = get_data_stats(train_data['velocity'])
+        normalized_velocity_data = normalize_data(train_data['velocity'], vel_stats)
 
+        self.action_stats = action_stats
+        self.vel_stats = vel_stats
 
         self.train_data['position'] = train_data['position']
         self.train_data['velocity'] = normalized_velocity_data #train_data['velocity']
