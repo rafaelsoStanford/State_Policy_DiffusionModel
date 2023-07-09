@@ -14,7 +14,9 @@ from utils.print_utils import *
 from utils.plot_utils import *
 
 class Diffusion(pl.LightningModule):
-    def __init__(self, noise_steps=1000
+    def __init__(self
+                , noise_steps=1000
+                , denoising_steps=1000
                 , obs_horizon = 10
                 , pred_horizon= 10
                 , observation_dim = 2
@@ -23,7 +25,8 @@ class Diffusion(pl.LightningModule):
                 , model = 'UNet'
                 , vision_encoder = None
                 , noise_scheduler = 'linear_v2'
-                , inpaint_horizon = 10):
+                , inpaint_horizon = 10
+                 ):
         super().__init__()
 
         self.save_hyperparameters()
@@ -31,6 +34,7 @@ class Diffusion(pl.LightningModule):
 # ==================== Init ====================
     # --------------------- Diffusion params ---------------------
         self.noise_steps = self.hparams.noise_steps
+        self.denoising_steps = self.hparams.denoising_steps
         self.NoiseScheduler = None
         self.obs_horizon = obs_horizon
         self.pred_horizon = pred_horizon
@@ -189,7 +193,7 @@ class Diffusion(pl.LightningModule):
             sampling_history = []
             x_t = torch.rand(1, 1, self.pred_horizon + self.inpaint_horizon, self.prediction_dim, device=self.device)
 
-            for t in reversed(range(0,200)): # t ranges from 999 to 0
+            for t in reversed(range(0,self.denoising_steps)): # t ranges from denoising_steps-1 to 0
                 x_t =  self.p_reverseProcess(obs_cond,  x_t,  t)
                 x_t = self.add_constraints(x_t, x_0)
                 sampling_history.append(x_t.squeeze().detach().cpu().numpy())
