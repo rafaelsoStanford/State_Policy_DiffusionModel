@@ -71,6 +71,7 @@ def main(args):
     dataset.setup(name=dataset_name)
     train_dataloader = dataset.train_dataloader()
     valid_dataloader = dataset.val_dataloader()
+    dataset.save_min_max("./MinMax.pkl")
 
     # # ===========model===========
     diffusion = Diffusion(
