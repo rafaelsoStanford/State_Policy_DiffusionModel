@@ -76,37 +76,40 @@ def switch_mode(modes):
 def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
     # ======================  INITIALIZATION  ====================== #
     # Random seed for each episode -- track during episode is different
-    seeds = [42] #np.random.randint(0, 200, size=NUM_EPISODES)
+    seeds = np.random.randint(0, 200, size=NUM_EPISODES) # [42] #
+    
+    # ----- Error buffers ----- #
     error_hist = []
     error_avg_hist = []
-
     error_velocity_buffer = deque(np.zeros(7), maxlen = 7)
+    error_buffer = deque(np.zeros(10), maxlen = 10) # Buffer for storing errors for PID controller
+    error_buffer_2 = deque(np.zeros(3), maxlen = 3) # Buffer for storing errors for PID controller
 
-    # PID controllers for velocity, steering and breaking
-    pid_velocity = PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(-10, 10)) # PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(0, 1))
-    pid_breaking = PID(0.01, 0.00, 0.9, setpoint=0.0, output_limits=(-10, 10))
-    pid_steering = PID(0.8, 0.01, 0.04, setpoint=0, output_limits=(-10, 10))
-    # Image car coordinates ( fixed in image frame)
+    #----- PID controllers ----- #
+    pid_velocity = PID(0.005, 0.001, 0.0005, setpoint=VELOCITIES[0]) # PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(0, 1))
+    pid_steering = PID(0.8, 0.01, 0.06, setpoint=0) # If negative switch over to breaking pedal
+
+    # -----  Run parameters ----- #
+    strip_distance = 60 # x - coordinates of the strip
     car_pos_vector = np.array([70, 48])
     max_steps = 1000 # Max steps per episode
-    wait_steps = 100 # Wait steps before starting to collect data
+    wait_steps = 50 # Wait steps before starting to collect data
+    total_steps = max_steps + wait_steps
     velocitites = VELOCITIES
     
     # ======================  START RUN  ====================== #
     print("*"*10 +" Starting run...: Current Mode: ", MODE, "*"*10)
     for episode in range(NUM_EPISODES):
+        # -----  Initialize Run  ----- #
         #Initialize list for storing data -- will be sent to zarr replay buffer
         img_hist, vel_hist ,act_hist, pos_hist = [], [], [], []
-        #Initialize action array
         action = np.array([0, 0, 0], dtype=np.float32)
-        #Initialize environment
         env.seed(int(seeds[episode]))
         env.reset()
         obs, _ , done, info = env.step(action) # Take a step to get the environment started (action is empty)
 
-        error_buffer = deque(np.zeros(7), maxlen = 7) # Buffer for storing errors for PID controller
-
-        for i in range(max_steps + wait_steps):
+    # ======================  START EPISODE  ====================== #
+        for i in range(total_steps):
             isopen = env.render(render_mode)
             augmImg = info['augmented_img'] # Augmented image with colored trajectories
             velB2vec = info['car_velocity_vector']
@@ -116,76 +119,62 @@ def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
             carPosition_wFrame = [posB2vec.x , posB2vec.y]
             v_wFrame = np.linalg.norm(velB2vec)
             
-            if i < wait_steps: # First 100 steps, we do nothing (avoid zooming animation)
+            if i < wait_steps: # First x steps, we do nothing (avoid zooming animation)
                 env.step(action)
                 continue
 
-            if i % 200 == 0: # All 200 steps, we change velocity
-                pid_velocity.setpoint = random.choice(velocitites)
+            # if i % 200 == 0: # All 200 steps, we change velocity 
+            #     pid_velocity.setpoint = random.choice(velocitites)
 
-            # ======================  TRAJECTORY CONTROL  ====================== #
-            # Render all trajectories using masks:
+            # ------ TRAJECTORY CONTROL ------ #
             dict_masks = maskTrajecories(augmImg)
             track_img = dict_masks[MODE] # Get the correct mask for the desired agent
 
-            # # Dilute track image horizontally to get a single line strip in front of the car
-            kernel = np.ones((3, 1), np.uint8)
-            track_img = cv2.dilate(track_img, kernel, iterations=2)
-
             # Get single line strip in front of car
-            line_strip = track_img[60, :]
+            line_strip = track_img[strip_distance, :]
             idx = np.nonzero(line_strip)[0]
 
-            if len(idx) == 0: # Rarely happens, but sometimes the is no intersection of trajectory with line strip -> continue with previous action
+            if len(idx) == 0: # Rarely happens, but sometimes at the thightest curve we lose intersection of strip with trajectory -> -1 angle
                 action[0] = -1.0
                 obs, _, done, info = env.step(action)
                 continue
 
             # Get index closest to middle of strip (idx = 48)
             idx = idx[np.argmin(np.abs(idx - 48))]
-            target_point = np.array([60, idx])
+            target_point = np.array([strip_distance, idx])
             car2point_vector = target_point - car_pos_vector# As an approximation let angle be the x component of the car2point vector
             
-    
-            # ======================  PID CONTROL  ====================== #
-            # Use distance and velocity information to control the car. Some values are hardcoded, by trial and error
+            # ------  PID CONTROL  ------ #
             err =  idx - 48.0 # Correcting for the fact that negative value is a left turn, ie positive angle
             err = np.clip(err, -5, 5) # Clip the error to avoid large changes of steering angle going to infinity
+            if np.linalg.norm(err) <= 2: # Attenuate errors close to target trajectory -- otherwise we get oscillations
+                err = 0.3 * err
+            # Buffer for error data -- used for smoothing the error signal -- Simple averaging filter over 10 steps and then 3 steps
             error_buffer.append(err)
-            error_hist.append(err.copy())
-
-            # if abs(err) < 2:
-            #     err = 0 
-
-            # Buffer for error data
+            error_hist.append(err)
             error_avg = sum(error_buffer) / len(error_buffer)
-            error_avg_hist.append(error_avg.copy())
+            error_buffer_2.append(error_avg)
+            error_avg_2 = sum(error_buffer_2) / len(error_buffer_2)
+            error_avg_hist.append(error_avg_2)
 
-            angle = np.arctan2(abs(error_avg), abs(car2point_vector[0]))
-            if err > 0:
-                angle = -angle
-
+            angle = np.arctan2(abs(error_avg_2), abs(car2point_vector[0]))
+            if error_avg_2 > 0:
+                angle = -angle # Negative angle is a left turn
             action[0] = pid_steering(angle)
 
-            # if abs(action[0]) > 0.8:
-            #     action[2] = 0.9
+            # ------  VELOCITY CONTROL  ------ #
             error_vel = pid_velocity.setpoint - np.linalg.norm(v_wFrame)
             error_velocity_buffer.append(error_vel)
             error_vel_avg = sum(error_velocity_buffer) / len(error_velocity_buffer)
-
-
-            if error_vel_avg < -5:
+            
+            if error_vel_avg < -0.0:
                 action[1] = 0
-                action[2] = np.clip(pid_breaking(np.linalg.norm(v_wFrame)), 0, 0.9)
+                action[2] = np.clip( np.linalg.norm( pid_velocity(np.linalg.norm(v_wFrame)) ) , 0 , 0.9) 
             else:
-                action[1] = np.clip(pid_velocity(np.linalg.norm(v_wFrame)), 0, 1.0)
+                action[1] = pid_velocity(np.linalg.norm(v_wFrame))
                 action[2] = 0
 
-            # action[1] = np.linalg.norm(pid_velocity(np.linalg.norm(v_wFrame)))
-            # action[2] = np.linalg.norm(pid_breaking(np.linalg.norm(v_wFrame)))
-
-            #print(" Error: " , err, "  || Angle: ", angle, "  || Action: ", pid_steering(angle), " || IDX: ", idx)
-            print("velocity: " , np.linalg.norm(v_wFrame))
+            # ------ Step the environment ------ #
             obs, _ , done, info = env.step(action)
             
             # Save the observation and action            
@@ -204,32 +193,19 @@ def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
         act_hist = np.array(act_hist, dtype=np.float32)
         vel_hist = np.array(vel_hist, dtype=np.float32)
         pos_hist = np.array(pos_hist, dtype=np.float32)
-
         # Normalize each image in img_hist to be between 0 and 1
         img_hist = img_hist / 255.0
-
-        # Check if act_hist has nan values. If yes, replace with 0
-        if np.isnan(act_hist).any():
-            act_hist = np.nan_to_num(act_hist)
-            print(" WARNING: act_hist had nan values. Replaced with 0")
 
         episode_data = {
                 "img": img_hist, 
                 "velocity": vel_hist, 
                 "position": pos_hist,
                 "action": act_hist, 
-                "h_action": act_hist #This will act as a placeholder for "human action". It is crude, but works for current testing purposes
                 }
 
         buffer.add_episode(episode_data)
         print("Episode finished after {} timesteps".format(len(img_hist)))
     env.close()
-
-    # plt.figure()
-    # plt.plot(error_hist)
-    # plt.plot(error_avg_hist)
-    # plt.show()
-
     return img_hist, vel_hist ,act_hist, pos_hist
 
 def generateData(args):
