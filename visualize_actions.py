@@ -5,7 +5,7 @@ import torch
 import numpy as np
 
 
-dataset_path = "./data/Sinusoidal_dataset_5_episodes.zarr.zip"
+dataset_path = "./data/2023-07-09-2246_dataset_1_episodes_3_modes.zarr.zip"
 # read from zarr dataset
 dataset_root = zarr.open(dataset_path, 'r')
 
@@ -29,7 +29,7 @@ print ("maxAction: ", maxAction)
 # Visualize the action data
 fig = plt.figure()
 #plt.plot(train_data['action'][0:episode_ends[0],0])
-plt.scatter( np.arange(train_data['action'][0:episode_ends[0],:].shape[0]), train_data['action'][0:episode_ends[0],0] , c='r', s=1)
+plt.scatter( np.arange(train_data['action'][0:episode_ends[0],:].shape[0]), train_data['action'][0:episode_ends[0],1] , c='r', s=1)
 # ax2.plot(train_data['action'][0:episode_ends[0],1])
 # ax2.scatter( np.arange(train_data['action'].shape[0]), train_data['action'][:,1] , c='r', s=1)
 # ax3.plot(train_data['action'][0:episode_ends[0],2])
@@ -42,5 +42,7 @@ fig2 = plt.figure()
 pos_track_1 = train_data['position'][0:episode_ends[0]]
 #Plot track 1 in figure 2
 plt.plot(pos_track_1[:,0], pos_track_1[:,1])
+
+
 plt.show()
 plt.waitforbuttonpress()

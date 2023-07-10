@@ -15,6 +15,9 @@ import shutil
 import zarr
 import numpy as np
 import argparse
+import cv2
+import matplotlib.pyplot as plt
+from collections import deque
 
 # setting path
 sys.path.append('../diffusion_bare')
@@ -73,20 +76,25 @@ def switch_mode(modes):
 def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
     # ======================  INITIALIZATION  ====================== #
     # Random seed for each episode -- track during episode is different
-    seeds = np.random.randint(0, 200, size=NUM_EPISODES)
+    seeds = [42] #np.random.randint(0, 200, size=NUM_EPISODES)
+    error_hist = []
+    error_avg_hist = []
+
+    error_velocity_buffer = deque(np.zeros(7), maxlen = 7)
+
     # PID controllers for velocity, steering and breaking
-    pid_velocity = PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(0, 1)) # PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(0, 1))
-    pid_breaking = PID(0.05, 0.00, 0.08, setpoint=0.0, output_limits=(0, 0.9))
-    pid_steering = PID(0.8, 0.01, 0.3, setpoint=0, output_limits=(-1, 1))  # PID(0.5, 0.01, 100.0, setpoint=0, output_limits=(-1, 1))
+    pid_velocity = PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(-10, 10)) # PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(0, 1))
+    pid_breaking = PID(0.01, 0.00, 0.9, setpoint=0.0, output_limits=(-10, 10))
+    pid_steering = PID(0.8, 0.01, 0.04, setpoint=0, output_limits=(-10, 10))
     # Image car coordinates ( fixed in image frame)
     car_pos_vector = np.array([70, 48])
     max_steps = 1000 # Max steps per episode
     wait_steps = 100 # Wait steps before starting to collect data
     velocitites = VELOCITIES
-
+    
     # ======================  START RUN  ====================== #
     print("*"*10 +" Starting run...: Current Mode: ", MODE, "*"*10)
-    for episode in trange(NUM_EPISODES, desc="Episode"):
+    for episode in range(NUM_EPISODES):
         #Initialize list for storing data -- will be sent to zarr replay buffer
         img_hist, vel_hist ,act_hist, pos_hist = [], [], [], []
         #Initialize action array
@@ -96,7 +104,9 @@ def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
         env.reset()
         obs, _ , done, info = env.step(action) # Take a step to get the environment started (action is empty)
 
-        for i in trange(max_steps + wait_steps, desc="Step"):
+        error_buffer = deque(np.zeros(7), maxlen = 7) # Buffer for storing errors for PID controller
+
+        for i in range(max_steps + wait_steps):
             isopen = env.render(render_mode)
             augmImg = info['augmented_img'] # Augmented image with colored trajectories
             velB2vec = info['car_velocity_vector']
@@ -117,6 +127,11 @@ def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
             # Render all trajectories using masks:
             dict_masks = maskTrajecories(augmImg)
             track_img = dict_masks[MODE] # Get the correct mask for the desired agent
+
+            # # Dilute track image horizontally to get a single line strip in front of the car
+            kernel = np.ones((3, 1), np.uint8)
+            track_img = cv2.dilate(track_img, kernel, iterations=2)
+
             # Get single line strip in front of car
             line_strip = track_img[60, :]
             idx = np.nonzero(line_strip)[0]
@@ -131,27 +146,46 @@ def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
             target_point = np.array([60, idx])
             car2point_vector = target_point - car_pos_vector# As an approximation let angle be the x component of the car2point vector
             
+    
             # ======================  PID CONTROL  ====================== #
             # Use distance and velocity information to control the car. Some values are hardcoded, by trial and error
-        
-            err =  idx - 48 # Correcting for the fact that negative value is a left turn, ie positive angle
+            err =  idx - 48.0 # Correcting for the fact that negative value is a left turn, ie positive angle
             err = np.clip(err, -5, 5) # Clip the error to avoid large changes of steering angle going to infinity
+            error_buffer.append(err)
+            error_hist.append(err.copy())
 
-            angle = np.arctan2(abs(err), abs(car2point_vector[0]))
+            # if abs(err) < 2:
+            #     err = 0 
+
+            # Buffer for error data
+            error_avg = sum(error_buffer) / len(error_buffer)
+            error_avg_hist.append(error_avg.copy())
+
+            angle = np.arctan2(abs(error_avg), abs(car2point_vector[0]))
             if err > 0:
                 angle = -angle
+
             action[0] = pid_steering(angle)
 
             # if abs(action[0]) > 0.8:
             #     action[2] = 0.9
+            error_vel = pid_velocity.setpoint - np.linalg.norm(v_wFrame)
+            error_velocity_buffer.append(error_vel)
+            error_vel_avg = sum(error_velocity_buffer) / len(error_velocity_buffer)
 
-            if pid_velocity.setpoint - np.linalg.norm(v_wFrame) < -5:
+
+            if error_vel_avg < -5:
                 action[1] = 0
                 action[2] = np.clip(pid_breaking(np.linalg.norm(v_wFrame)), 0, 0.9)
             else:
                 action[1] = np.clip(pid_velocity(np.linalg.norm(v_wFrame)), 0, 1.0)
                 action[2] = 0
 
+            # action[1] = np.linalg.norm(pid_velocity(np.linalg.norm(v_wFrame)))
+            # action[2] = np.linalg.norm(pid_breaking(np.linalg.norm(v_wFrame)))
+
+            #print(" Error: " , err, "  || Angle: ", angle, "  || Action: ", pid_steering(angle), " || IDX: ", idx)
+            print("velocity: " , np.linalg.norm(v_wFrame))
             obs, _ , done, info = env.step(action)
             
             # Save the observation and action            
@@ -190,6 +224,12 @@ def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
         buffer.add_episode(episode_data)
         print("Episode finished after {} timesteps".format(len(img_hist)))
     env.close()
+
+    # plt.figure()
+    # plt.plot(error_hist)
+    # plt.plot(error_avg_hist)
+    # plt.show()
+
     return img_hist, vel_hist ,act_hist, pos_hist
 
 def generateData(args):
@@ -247,7 +287,7 @@ if __name__ == "__main__":
     parser.add_argument("--chunk_len", type=int, default=-1, help="Chunk length")
     parser.add_argument("--dataset_name", type=str, default=None, help="Dataset name")
     parser.add_argument("--base_dir", type=str, default="./data/", help="Base directory")
-    parser.add_argument("--modes", nargs="+", default=["middle", "left", "right"], help="Modes list")
+    parser.add_argument("--modes", nargs="+", default=["middle", "left" , "right"], help="Modes list")
     parser.add_argument("--velocities", nargs="+", default=[  20 ], help="Velocities list")
     parser.add_argument("--render_mode", type=str, default="human", help="render mode of gym env. human means render, rgb_array means no render visible")
 
