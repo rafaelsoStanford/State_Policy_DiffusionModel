@@ -112,7 +112,6 @@ class CarRacingDataset(torch.utils.data.Dataset):
         self.obs_horizon = obs_horizon
         self.pred_horizon = pred_horizon
         self.sequence_len = obs_horizon + pred_horizon # chunk lenght of data
-        #self.normalized_train_data = {}
         self.train_data = {}
 
         print("Loading Data from Zarr File")
@@ -219,3 +218,5 @@ class CarRacingDataModule(pl.LightningDataModule):
     def save_min_max(self, path):
         with open(path, 'wb') as f:
             pickle.dump([self.data_full.action_stats, self.data_full.vel_stats], f)
+            
+            

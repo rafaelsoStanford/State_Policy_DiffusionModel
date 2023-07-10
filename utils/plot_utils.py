@@ -174,8 +174,8 @@ def plt_toVideo(self,
 
             plt.grid()
             plt.axis('equal')
-            plt.xlim(-1.5, 1.5)
-            plt.ylim(-1.5, 1.5)
+            plt.xlim(-5, 5)
+            plt.ylim(-5, 5)
 
         fig.animation = FuncAnimation(fig, animate, frames=self.denoising_steps, interval=20, repeat=False)
         fig.animation.save('./animations/' + self.date + 'animation_positions.gif', writer='pillow')
