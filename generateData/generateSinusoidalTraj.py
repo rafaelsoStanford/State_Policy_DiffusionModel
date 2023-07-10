@@ -10,11 +10,15 @@ IMPORTANT:  The current environment of car_race is not compatible with gym or gy
 '''
 
 import os
+import sys
 import shutil
 import zarr
 import numpy as np
 from datetime import datetime
 import argparse
+
+# setting path
+sys.path.append('../diffusion_bare')
 
 from utils.replay_buffer import ReplayBuffer
 from envs.car_racing import CarRacing
@@ -57,6 +61,10 @@ def pidDriver(env, buffer, TARGET_VELOCITY, NUM_EPISODES):
             # Calculate action using PID controller
             action = calculateAction(observation, TARGET_VELOCITY)
 
+            action[0] = np.clip(action[0], -1, 1)
+            action[1] = np.clip(action[1], 0, 1)
+            action[2] = np.clip(action[2], 0, 1)
+            
             # Take the action
             obs, reward, done, info = env.step(action)
 
@@ -305,7 +313,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_name", type=str, default=None, help="Dataset name")
     parser.add_argument("--base_dir", type=str, default="./data/", help="Base directory")
     parser.add_argument("--velocity", type=int, default=30, help="Target velocitiy for the car")
-    parser.add_argument("--render_mode", type=str, default="rgb_array", help="render mode of gym env. human means render, rgb_array means no render visible")
+    parser.add_argument("--render_mode", type=str, default="human", help="render mode of gym env. human means render, rgb_array means no render visible")
 
     args = parser.parse_args()
     render_mode = args.render_mode

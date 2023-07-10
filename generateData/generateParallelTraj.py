@@ -10,13 +10,17 @@ IMPORTANT:  The current environment of car_race is not compatible with gym or gy
 '''
 
 import os
+import sys
 import shutil
 import zarr
 import numpy as np
 import argparse
 
+# setting path
+sys.path.append('../diffusion_bare')
+
 from utils.replay_buffer import ReplayBuffer
-from utils.car_racing import CarRacing
+from envs.car_racing import CarRacing
 from utils.functions import *
 
 import random
@@ -71,9 +75,9 @@ def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
     # Random seed for each episode -- track during episode is different
     seeds = np.random.randint(0, 200, size=NUM_EPISODES)
     # PID controllers for velocity, steering and breaking
-    pid_velocity = PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(0, 1))
+    pid_velocity = PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(0, 1)) # PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(0, 1))
     pid_breaking = PID(0.05, 0.00, 0.08, setpoint=0.0, output_limits=(0, 0.9))
-    pid_steering = PID(0.8, 0.01, 0.3, setpoint=0, output_limits=(-1, 1))
+    pid_steering = PID(0.8, 0.01, 0.3, setpoint=0, output_limits=(-1, 1))  # PID(0.5, 0.01, 100.0, setpoint=0, output_limits=(-1, 1))
     # Image car coordinates ( fixed in image frame)
     car_pos_vector = np.array([70, 48])
     max_steps = 1000 # Max steps per episode
@@ -138,14 +142,14 @@ def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
                 angle = -angle
             action[0] = pid_steering(angle)
 
-            if abs(action[0]) > 0.8:
-                action[2] = 0.9
+            # if abs(action[0]) > 0.8:
+            #     action[2] = 0.9
 
             if pid_velocity.setpoint - np.linalg.norm(v_wFrame) < -5:
                 action[1] = 0
-                action[2] = pid_breaking(np.linalg.norm(v_wFrame))
+                action[2] = np.clip(pid_breaking(np.linalg.norm(v_wFrame)), 0, 0.9)
             else:
-                action[1] = pid_velocity(np.linalg.norm(v_wFrame))
+                action[1] = np.clip(pid_velocity(np.linalg.norm(v_wFrame)), 0, 1.0)
                 action[2] = 0
 
             obs, _ , done, info = env.step(action)
@@ -182,6 +186,7 @@ def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
                 "action": act_hist, 
                 "h_action": act_hist #This will act as a placeholder for "human action". It is crude, but works for current testing purposes
                 }
+
         buffer.add_episode(episode_data)
         print("Episode finished after {} timesteps".format(len(img_hist)))
     env.close()
@@ -243,8 +248,8 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_name", type=str, default=None, help="Dataset name")
     parser.add_argument("--base_dir", type=str, default="./data/", help="Base directory")
     parser.add_argument("--modes", nargs="+", default=["middle", "left", "right"], help="Modes list")
-    parser.add_argument("--velocities", nargs="+", default=[ 10 , 20 ], help="Velocities list")
-    parser.add_argument("--render_mode", type=str, default="rgb_array", help="render mode of gym env. human means render, rgb_array means no render visible")
+    parser.add_argument("--velocities", nargs="+", default=[  20 ], help="Velocities list")
+    parser.add_argument("--render_mode", type=str, default="human", help="render mode of gym env. human means render, rgb_array means no render visible")
 
     args = parser.parse_args()
 
