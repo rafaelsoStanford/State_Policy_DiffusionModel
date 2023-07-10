@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 from envs.car_racing import CarRacing
 from utils.functions import *
 from utils.load_data import *
-from models.diffusion import *
+from models.diffusion_ddpm import *
 
 # ======================  HELPER FUNCTIONS  ====================== #
 
@@ -88,7 +88,7 @@ path_hyperparams = './tb_logs/version_503/hparams.yaml'
 path_checkpoint = './tb_logs/version_503/checkpoints/epoch=30.ckpt'
 
 model_params = fetch_hyperparams_from_yaml(path_hyperparams)
-model = Diffusion.load_from_checkpoint(
+model = Diffusion_DDPM.load_from_checkpoint(
     path_checkpoint,
     hparams_file=path_hyperparams
 )
