@@ -5,7 +5,8 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging, ModelCheckpoint
 
-from models.diffusion import *
+from models.diffusion_ddpm import *
+from models.diffusion_ddim import *
 from utils.load_data import *
 
 import os
@@ -26,14 +27,14 @@ def main():
     AMP = True
     n_epochs = 1
     batch_size = 1
-    denoising_steps = 500
+    denoising_steps = 70 
 
     # =========== Load Model ===========
-    path_hyperparams = './tb_logs/version_513/hparams.yaml'
-    path_checkpoint = './tb_logs/version_513/checkpoints/epoch=45.ckpt'
+    path_hyperparams = './tb_logs/version_588/hparams.yaml'
+    path_checkpoint = './tb_logs/version_588/checkpoints/epoch=55.ckpt'
 
     model_params = fetch_hyperparams_from_yaml(path_hyperparams)
-    model = Diffusion.load_from_checkpoint(
+    model = Diffusion_DDIM.load_from_checkpoint( #Choose between DDPM and DDIM -- Model is inherited from DDPM thus they should be compatible
         path_checkpoint,
         hparams_file=path_hyperparams,
         denoising_steps = denoising_steps,
@@ -48,7 +49,7 @@ def main():
     # Dataset dir and filename
     dataset_dir = './data'
     dataset = CarRacingDataModule( batch_size, dataset_dir, obs_horizon, pred_horizon ,seed=42)
-    dataset.setup( name='Sinusoidal_dataset_5_episodes.zarr.zip' )
+    dataset.setup( name='2023-07-10-0053_dataset_1_episodes_3_modes.zarr.zip' )
     test_dataloaders = dataset.val_dataloader()
 
     # =========== Pytorch Lightning Trainer  ===========

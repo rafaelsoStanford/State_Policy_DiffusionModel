@@ -6,7 +6,7 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging, ModelCheckpoint
 
-from models.diffusion import *
+from models.diffusion_ddpm import *
 from utils.load_data import *
 from utils.print_utils import *
 
@@ -30,10 +30,9 @@ def parse_arguments():
     parser.add_argument('--noise_scheduler', type=str, default='linear', help='String for choosing noise scheduler')
 
     parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
-    parser.add_argument('--dataset', type=str, default='2023-07-10-0125_dataset_20_episodes_3_modes.zarr.zip', help='zarr.zip dataset filename')
+    parser.add_argument('--dataset', type=str, default='2023-07-09-1800_dataset_1_episodes_1_modes.zarr.zip', help='zarr.zip dataset filename')
     
     return parser.parse_args()
-
 
 ############################
 #========== MAIN ===========
@@ -74,7 +73,7 @@ def main(args):
     dataset.save_min_max("./MinMax.pkl")
 
     # # ===========model===========
-    diffusion = Diffusion(
+    diffusion = Diffusion_DDPM(
                     noise_steps= noise_steps,
                     obs_horizon=obs_horizon,
                     pred_horizon= pred_horizon,
