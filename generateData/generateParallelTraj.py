@@ -243,7 +243,7 @@ def generateData(args):
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate Data")
-    parser.add_argument("--num_episodes_per_mode", type=int, default=2, help="Number of episodes per mode")
+    parser.add_argument("--num_episodes_per_mode", type=int, default=1, help="Number of episodes per mode")
     parser.add_argument("--chunk_len", type=int, default=-1, help="Chunk length")
     parser.add_argument("--dataset_name", type=str, default=None, help="Dataset name")
     parser.add_argument("--base_dir", type=str, default="./data/", help="Base directory")
