@@ -15,7 +15,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Training script')
     parser.add_argument('--n_epochs', type=int, default=500, help='Number of epochs')
     parser.add_argument('--amp', action='store_true', help='Enable Automatic Mixed Precision (AMP)')
-    parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
+    parser.add_argument('--batch_size', type=int, default=8, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
 
     parser.add_argument('--obs_horizon', type=int, default=40, help='Observation horizon')
@@ -30,7 +30,7 @@ def parse_arguments():
     parser.add_argument('--noise_scheduler', type=str, default='linear', help='String for choosing noise scheduler')
 
     parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
-    parser.add_argument('--dataset', type=str, default='Sinusoidal_dataset_5_episodes.zarr.zip', help='zarr.zip dataset filename')
+    parser.add_argument('--dataset', type=str, default='2023-07-10-0125_dataset_20_episodes_3_modes.zarr.zip', help='zarr.zip dataset filename')
     
     return parser.parse_args()
 
