@@ -10,11 +10,13 @@ from datetime import datetime
 from models.Unet_FiLmLayer import *
 from models.simple_Unet import * 
 from models.encoder.autoencoder import *
+from utils.schedulers import *
 from utils.print_utils import *
 from utils.plot_utils import *
+from utils.data_utils import *
 
 
-class Diffusion(pl.LightningModule):
+class Diffusion_DDPM(pl.LightningModule):
     def __init__(self
                 , noise_steps=1000
                 , denoising_steps=1000
@@ -25,7 +27,7 @@ class Diffusion(pl.LightningModule):
                 , learning_rate = 1e-4
                 , model = 'UNet'
                 , vision_encoder = None
-                , noise_scheduler = 'linear_v2'
+                , noise_scheduler = 'linear'
                 , inpaint_horizon = 10
                  ):
         super().__init__()
@@ -245,10 +247,10 @@ class Diffusion(pl.LightningModule):
     def prepare_pred_cond_vectors(self, batch):
 
         # ---------------- Preparing Observation data ----------------
-        normalized_img              = normalize_image( batch['image'][:,:self.obs_horizon ,:] ) 
-        normalized_pos, translation_vec,  pos_stats   = normalize_position( batch['position'][:,:self.obs_horizon ,:]  )
-        normalized_act   = normalize_action( batch['action'][:,:self.obs_horizon,:]  )
-        normalized_vel          = normalize_velocity( batch['velocity'][:,:self.obs_horizon ,:]  )
+        normalized_img                                  = normalize_image( batch['image'][:,:self.obs_horizon ,:] ) 
+        normalized_pos, translation_vec,  pos_stats     = normalize_position( batch['position'][:,:self.obs_horizon ,:]  )
+        normalized_act                                  = normalize_action( batch['action'][:,:self.obs_horizon,:]  )
+        normalized_vel                                  = normalize_velocity( batch['velocity'][:,:self.obs_horizon ,:]  )
 
         # ---------------- Encoding Image data ----------------
         encoded_img = self.vision_encoder(normalized_img.flatten(end_dim=1)) # (B, 128)
@@ -273,129 +275,4 @@ class Diffusion(pl.LightningModule):
         return x_0 , obs_cond
 
 
-def get_data_stats(data: torch.Tensor):
-    data = data.reshape(-1,data.shape[-1])
-    min, _ =  torch.min(data, axis=0)
-    max, _ =  torch.max(data, axis=0)
-    stats = {
-        'min': min,
-        'max': max
-    }
-    return stats
 
-def normalize_data(data, stats):
-    # nomalize to [0,1]
-    diffs = stats['max'] - stats['min']
-    if torch.any(diffs == 0): # Avoid division by zero
-        diffs[diffs == 0] = 1
-    ndata = (data - stats['min']) / diffs
-    # normalize to [-1, 1]
-    ndata = ndata * 2 - 1
-    return ndata
-
-def normalize_batch(data, stats):
-    # stats has B elements
-    ndata = torch.zeros_like(data)
-    for b, d in enumerate(data):
-        ndata[b,...] = normalize_data(d, stats[b])
-    return ndata
-
-def normalize_image(image):
-    """
-    Normalize image data assuming values are already between 0 and 1.
-    """
-    assert (image.max() <= 1.0 and image.min() >= 0.0)
-    return image
-
-def normalize_position(position: torch.Tensor):
-    """
-    Normalize position data by subtracting the mean and dividing by 2.
-    position: (B, T, 2)
-    """
-    stats_list = []
-    position_normalized = torch.zeros_like(position)
-    translation_to_zero = torch.zeros((position.size(0), 2), device=position.device)
-    for b, data in enumerate(position):
-        stats = get_data_stats(data)  # Assuming get_data_stats function is defined
-        sample_normalized = normalize_data(data, stats)
-        translation_to_zero[b] = sample_normalized[0,:]
-        sample_normalized = (sample_normalized - translation_to_zero[b]) / 2.0
-        stats_list.append(stats)
-        position_normalized[b] = sample_normalized
-    assert(not torch.isnan(position_normalized).any())
-    return position_normalized, translation_to_zero, stats_list
-
-def normalize_action(action):
-    # Normalize action data assuming values are already between -1 and 1, when loaded by the dataloader.
-    assert (action.max() <= 1.0 and action.min() >= -1.0)
-    assert(not torch.isnan(action).any())
-    return action
-    # stats_list = []
-    # action_normalized = torch.zeros_like(action)
-    # for b, data in enumerate(action):
-    #     stats = get_data_stats(data)  # Assuming get_data_stats function is defined
-    #     data_normalized = normalize_data(data, stats)  # Assuming normalize_data function is defined
-    #     action_normalized[b] = data_normalized
-    #     stats_list.append(stats)
-    # assert(not torch.isnan(action_normalized).any())
-    # return action_normalized, stats_list
-
-def normalize_velocity(velocity):
-    # Normalize velocity data assuming values are already between -1 and 1, done by the dataloader.
-    assert (velocity.max() <= 1.0 and velocity.min() >= -1.0)
-    assert(not torch.isnan(velocity).any())
-    return velocity
-    # """
-    # Normalize velocity data using the statistics from get_data_stats function.
-    # velocity: (B, T, ...)
-    # """
-    # stats_list = []
-    # velocity_normalized = torch.zeros_like(velocity)
-    # for b in range(velocity.size(0)):
-    #     data = velocity[b]
-    #     stats = get_data_stats(data)  # Assuming get_data_stats function is defined
-    #     data_normalized = normalize_data(data, stats)  # Assuming normalize_data function is defined
-    #     velocity_normalized[b] = data_normalized
-    #     stats_list.append(stats)
-    # assert(not torch.isnan(velocity_normalized).any())
-    # return velocity_normalized, stats_list
-
-
-
-
-# ==================== Schedulers ====================
-def linear_beta_schedule(self, steps):
-    """
-    linear schedule, proposed in original ddpm paper
-    """
-    scale = 1000 / steps
-    beta_start = scale * 0.0001
-    beta_end = scale * 0.02
-    beta = torch.linspace(beta_start, beta_end, steps, dtype=torch.float32, device=self.device)
-    return beta
-
-
-def linear_beta_schedule_v2(self, steps):
-    """
-    linear schedule, proposed in original ddpm paper
-    """
-    scale = 500 / steps
-    beta_start = scale * 0.0001
-    beta_end = scale * 0.02
-    beta = torch.linspace(beta_start, beta_end, steps, dtype=torch.float32, device=self.device)
-    return beta
-
-
-def cosine_beta_schedule(self, timesteps, s=0.008, dtype=torch.float32):
-    """
-    cosine schedule
-    as proposed in https://openreview.net/forum?id=-NEXDKk8gZ
-    """
-    steps = timesteps + 1
-    x = np.linspace(0, steps, steps)
-    alphas_cumprod = np.cos(((x / steps) + s) / (1 + s) * np.pi * 0.5) ** 2
-    alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
-    betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
-    betas_clipped = np.clip(betas, a_min=0, a_max=0.999)
-    betas =  torch.tensor(betas_clipped, dtype=dtype)
-    return betas
