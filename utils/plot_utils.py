@@ -7,6 +7,69 @@ import torch
 from matplotlib.animation import FuncAnimation
 
 
+def visualize_batch(batch):
+    print("Visualizing Batch and Data structure")
+    print(" [ B, t_sequence, dims ]")
+    for key, value in batch.items():
+        print()
+        print(f'--> Key: {key}')
+        print(f'Shape: ({len(value)}, {len(value[0])})')
+        print(value.shape)
+        print("Min: ", value.min())
+        print("Max: ", value.max())
+        print()
+
+    for traj in range(batch['position'].shape[0]):
+        plt.plot(batch['position'][traj, :, 0], batch['position'][traj, :, 1])
+        plt.scatter(0, 0, c='r')
+        plt.waitforbuttonpress()
+        plt.close()
+
+def visualize_position(data): # (B, t_ , 2)
+    data = data.detach().cpu().numpy()
+    for b, vals in enumerate(data):
+        print()
+        print("Min: ", vals.min())
+        print("Max: ", vals.max())
+        print()
+
+        plt.plot(vals[:, 0], vals[:, 1])
+        plt.scatter(0, 0, c='r')
+        plt.waitforbuttonpress()
+        plt.close()
+
+def visualize_actions(data): # (B, t_ , 3)
+    data = data.detach().cpu().numpy()
+    for b, vals in enumerate(data):
+        print()
+        print("Min: ", vals.min())
+        print("Max: ", vals.max())
+        print()
+
+        # Create a figure and subplots
+        fig, axs = plt.subplots(1, 3, figsize=(12, 4))  # 1 row, 3 columns
+
+        # Plot on the first subplot
+        axs[0].plot(vals[:, 0])
+        axs[0].set_title('Subplot 1')
+
+        # Plot on the second subplot
+        axs[1].plot(vals[:, 1])
+        axs[1].set_title('Subplot 2')
+
+        # Plot on the third subplot
+        axs[2].plot(vals[:, 2])
+        axs[2].set_title('Subplot 3')
+
+        # Add a title to the entire figure
+        fig.suptitle('Three Subplots Side by Side')
+
+        # Adjust the spacing between subplots
+        plt.subplots_adjust(wspace=0.3)
+
+        # Display the figure
+        plt.show()
+
 def plt2tsb(figure, writer, fig_name, niter):
     # Save the plot to a BytesIO object
     buf = io.BytesIO()

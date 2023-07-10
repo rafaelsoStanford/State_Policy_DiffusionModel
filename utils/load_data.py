@@ -112,7 +112,8 @@ class CarRacingDataset(torch.utils.data.Dataset):
         self.obs_horizon = obs_horizon
         self.pred_horizon = pred_horizon
         self.sequence_len = obs_horizon + pred_horizon # chunk lenght of data
-        self.normalized_train_data = {}
+        #self.normalized_train_data = {}
+        self.train_data = {}
 
         print("Loading Data from Zarr File")
 
@@ -140,21 +141,25 @@ class CarRacingDataset(torch.utils.data.Dataset):
             pad_before= 0,
             pad_after= 0)
 
-        # ========== Normalize Data ============ 
+        
+
+        # ========== Normalize Actions ============ 
         # normalized data to [-1,1], images are assumed to be normalized 
         stats = dict()
-        normalized_train_data = dict()
-        for key, data in train_data.items():
-            stats[key] = get_data_stats(data)
-            normalized_train_data[key] = normalize_data(data, stats[key])
-        self.stats = stats
+        action_stats = get_data_stats(train_data['action'])
+        normalized_action_data = normalize_data(train_data['action'], action_stats)
+        vel_stats = get_data_stats(train_data['velocity'])
+        normalized_velocity_data = normalize_data(train_data['velocity'], vel_stats)
 
-        self.normalized_train_data['image'] = train_image_data # [:,: , :80, :80] # Assumed to be already normalized, cropped to 80x80 removing the black border
-        self.normalized_train_data['action'] = normalized_train_data['action'] # train_data['action'] # All action space values are constrained to [-1,1]
-        self.normalized_train_data['velocity'] = normalized_train_data['velocity'] # train_data['velocity'] # All velocity values are constrained to [-1,1]
-        self.normalized_train_data['position'] = train_data['position'] 
+        self.action_stats = action_stats
+        self.vel_stats = vel_stats
+
+        self.train_data['position'] = train_data['position']
+        self.train_data['velocity'] = normalized_velocity_data #train_data['velocity']
+        self.train_data['action'] = normalized_action_data #train_data['action']
+        self.train_data['image'] = train_image_data
+
         self.indices = indices
-        # self.stats = stats
         self.pred_horizon = pred_horizon
         self.action_horizon = action_horizon
         self.obs_horizon = obs_horizon
@@ -169,20 +174,13 @@ class CarRacingDataset(torch.utils.data.Dataset):
 
         # get nomralized data using these indices
         nsample = sample_sequence(
-            train_data=self.normalized_train_data,
+            train_data=self.train_data,
             sequence_length=    self.sequence_len,
             buffer_start_idx=   buffer_start_idx,
             buffer_end_idx=     buffer_end_idx,
             sample_start_idx=   sample_start_idx,
             sample_end_idx=     sample_end_idx
         )
-
-        # # ========== normalize sample ============
-        sample_stat = get_data_stats(nsample['position'])
-        sample_normalized = normalize_data(nsample['position'], sample_stat)
-        translation_vec = sample_normalized[0,:]
-        nsample_centered = sample_normalized - translation_vec
-        nsample['position'] = nsample_centered / 2.0
 
         return nsample
 
