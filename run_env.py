@@ -63,6 +63,9 @@ path_hyperparams = './tb_logs/version_590/hparams.yaml'
 path_checkpoint = './tb_logs/version_590/checkpoints/epoch=17.ckpt'
 model, obs_horizon, pred_horizon = load_model(path_hyperparams, path_checkpoint)
 
+file_path = 'MinMax.pkl'
+stats = load_pickle_file(file_path)
+
 # ----- Error buffers ----- #
 error_hist = []
 error_avg_hist = []
@@ -96,8 +99,7 @@ action_buffer_pred = deque( pred_horizon * np.zeros(3), maxlen = pred_horizon) #
 # Run twice
 for run in range(2):
 
-  #Initialize list for storing data -- will be sent to zarr replay buffer
-  img_hist, vel_hist ,act_hist, pos_hist = [], [], [], []
+
   action = np.array([0, 0, 0], dtype=np.float32)
   env.seed(seed)
   env.reset()
@@ -105,7 +107,6 @@ for run in range(2):
   start = time.time()
   steps = 0
   while not done:
-    
     isopen = env.render("human")
     augmImg = info['augmented_img'] # Augmented image with colored trajectories
     velB2vec = info['car_velocity_vector']
@@ -120,6 +121,7 @@ for run in range(2):
       action = np.array([0.0, 0.0, 0.0])
       s, r, done, info = env.step(action) # Step has to be called for the environment to continue
       continue
+    
       
     if steps < start_steps:
       # Use PD controller to move away from starting position
@@ -135,51 +137,104 @@ for run in range(2):
                     "middle")
       
       obs, _, done, info = env.step(action)
-      
-      pos_buffer_obs.append(carPosition_wFrame)
-      image_buffer_obs.append(obs)
-      velocity_buffer_obs.append(carVelocity_wFrame)
-      action_buffer_obs.append(action)
-      
-      steps += 1
-      continue
-    
-    pos_buffer_obs = np.array(pos_buffer_obs, dtype=np.float32)
-    image_buffer_obs = np.array(image_buffer_obs, dtype=np.float32)
-    vel_buffer_obs = np.array(velocity_buffer_obs, dtype=np.float32)
-    action_buffer_obs = np.array(action_buffer_obs, dtype=np.float32)
-    
-    # Continue to drive and saving predicted trajectory
-    if steps < start_steps + pred_horizon:
-      action =trajectory_control(augmImg, 
-                    strip_distance, 
-                    car_pos_vector, 
-                    pid_steering, 
-                    pid_velocity, 
-                    error_buffer,
-                    error_buffer_2,
-                    error_velocity_buffer,
-                    v_wFrame,
-                    "middle")
-      
-      obs, _, done, info = env.step(action)
-      
-      pos_buffer_pred.append(carPosition_wFrame)
-      image_buffer_pred.append(obs)
-      velocity_buffer_pred.append(carVelocity_wFrame)
-      action_buffer_pred.append(action)
+
+      if run == 0:
+        pos_buffer_obs.append(carPosition_wFrame)
+        image_buffer_obs.append(obs)
+        velocity_buffer_obs.append(carVelocity_wFrame)
+        action_buffer_obs.append(action)
       
       steps += 1
       continue
     
-    pos_buffer_pred = np.array(pos_buffer_pred, dtype=np.float32)
-    image_buffer_pred = np.array(image_buffer_pred, dtype=np.float32)
-    vel_buffer_pred = np.array(velocity_buffer_pred, dtype=np.float32)
-    action_buffer_pred = np.array(action_buffer_pred, dtype=np.float32)
+    if run == 0:
+      pos_buffer_obs = np.array(pos_buffer_obs, dtype=np.float32)
+      image_buffer_obs = np.array(image_buffer_obs, dtype=np.float32)
+      vel_buffer_obs = np.array(velocity_buffer_obs, dtype=np.float32)
+      action_buffer_obs = np.array(action_buffer_obs, dtype=np.float32)
     
-    plt.plot(pos_buffer_obs[:,0], pos_buffer_obs[:,1], 'b')
-    plt.plot(pos_buffer_pred[:,0], pos_buffer_pred[:,1], 'r')
-    plt.show()
+    
+      # Continue to drive and saving predicted trajectory
+      if steps < start_steps + pred_horizon:
+        action =trajectory_control(augmImg, 
+                      strip_distance, 
+                      car_pos_vector, 
+                      pid_steering, 
+                      pid_velocity, 
+                      error_buffer,
+                      error_buffer_2,
+                      error_velocity_buffer,
+                      v_wFrame,
+                      "middle")
+        
+        obs, _, done, info = env.step(action)
+        
+        pos_buffer_pred.append(carPosition_wFrame)
+        image_buffer_pred.append(obs)
+        velocity_buffer_pred.append(carVelocity_wFrame)
+        action_buffer_pred.append(action)
+        
+        steps += 1
+        continue
+      
+      pos_buffer_pred = np.array(pos_buffer_pred, dtype=np.float32)
+      image_buffer_pred = np.array(image_buffer_pred, dtype=np.float32)
+      vel_buffer_pred = np.array(velocity_buffer_pred, dtype=np.float32)
+      action_buffer_pred = np.array(action_buffer_pred, dtype=np.float32)
+      
+      plt.plot(pos_buffer_obs[:,0], pos_buffer_obs[:,1], 'b')
+      plt.plot(pos_buffer_pred[:,0], pos_buffer_pred[:,1], 'r')
+      plt.show()
+      
+      break
+    
+    if run == 1:
+      # Predict trajectory and actions: 
+      
+      nsample = {
+        'image': image_buffer_obs,
+        'position': torch.from_numpy(pos_buffer_obs),
+        'velocity': torch.from_numpy(vel_buffer_obs),
+        'action': torch.from_numpy(action_buffer_obs),
+      }
+      
+      nsample_pred = {
+        'image': torch.from_numpy(image_buffer_pred),
+        'position': torch.from_numpy(pos_buffer_pred),
+        'velocity': torch.from_numpy(vel_buffer_pred),
+        'action': torch.from_numpy(action_buffer_pred),
+      }
+      
+      pos_stats = stats[0]
+      action_stat = stats[1]
+      velocity_stat = stats[2]
+      
+      sample_normalized = normalize_data(nsample['position'], pos_stats)
+      translation_vec = sample_normalized[0,:]
+      nsample_centered = sample_normalized - translation_vec
+      nsample['position'] = nsample_centered / 2.0
+      
+      sample_normalized = normalize_data(nsample_pred['position'], pos_stats)
+      nsample_centered = sample_normalized - translation_vec
+      nsample_pred['position'] = nsample_centered / 2.0
+      
+      plt.plot(nsample['position'][:,0], nsample['position'][:,1], 'b')
+      plt.plot(nsample_pred['position'][:,0], nsample_pred['position'][:,1], 'r')
+      plt.show()
+      
+      # Normalize the other data:
+      nsample['velocity'] = normalize_data(nsample['velocity'], velocity_stat)
+      nsample['action'] = normalize_data(nsample['action'], action_stat)
+      
+      # Adjust image data:
+      # float32, [0,1], (N,96,96,3)
+      nsample['image'] = nsample['image']/255.0
+      nsample['image'] = np.moveaxis(nsample['image'], -1,1)
+      nsample['image'] = torch.from_numpy(nsample['image'])
+
+      model.sample(batch= nsample, mode='test')
+    
+    
     
   
 
