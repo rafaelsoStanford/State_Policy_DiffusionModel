@@ -177,7 +177,7 @@ def plt_toVideo(self,
             plt.xlim(-5, 5)
             plt.ylim(-5, 5)
 
-        fig.animation = FuncAnimation(fig, animate, frames=self.denoising_steps, interval=20, repeat=False)
+        fig.animation = FuncAnimation(fig, animate, frames=len(sampling_history), interval=20, repeat=False)
         fig.animation.save('./animations/' + self.date + 'animation_positions.gif', writer='pillow')
         print("Animation saved")
         plt.close('all')
@@ -202,7 +202,7 @@ def plt_toVideo(self,
             plt.grid()
             plt.ylim(-1.5, 1.5)
 
-        fig2.animation = FuncAnimation(fig2, animate_actions, frames=self.denoising_steps, interval=20, repeat=False)
+        fig2.animation = FuncAnimation(fig2, animate_actions, frames=len(sampling_history), interval=20, repeat=False)
         fig2.animation.save('./animations/' + self.date + 'animation_actions.gif', writer='pillow')
         print("Animation saved")
         plt.close('all')

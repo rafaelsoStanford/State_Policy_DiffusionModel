@@ -20,7 +20,7 @@ class Diffusion_DDIM(Diffusion_DDPM):
     Thus we only overwrite the generation process (sample function).
     """
 # ==================== Sampling ====================
-    def sample(self, batch, mode, step_size=50):
+    def sample(self, batch,  step_size = 20, ddpm_steps = 100):
         # Prepare Data
         x_0, obs_cond = self.prepare_pred_cond_vectors(batch)
         x_0 = x_0[0, ...].unsqueeze(0).unsqueeze(1)
@@ -51,10 +51,13 @@ class Diffusion_DDIM(Diffusion_DDPM):
             sampling_history.append(x.squeeze().detach().cpu().numpy().copy())
             t = t_next
         
-        for t in reversed(range(0, step_size)):
+        for t in reversed(range(0, ddpm_steps)):
             x = self.p_reverseProcess(obs_cond, x, t)
             x = self.add_constraints(x, x_0)
             sampling_history.append(x.squeeze().detach().cpu().numpy().copy())
+            
+        print("Sampling finished.")
+        print("Sampling history length: ", len(sampling_history))
     
         plt_toVideo(self,
                 sampling_history,
