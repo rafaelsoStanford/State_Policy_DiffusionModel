@@ -9,15 +9,14 @@ I want the following features:
     - Switching of the controller / behavior policy during run at set steps (e.g. 350/1000 steps)
 """
 
-import os
-import subprocess
+
 import numpy as np
 import torch
-import gym
+
 import time
 from collections import deque
 
-import math
+
 import matplotlib.pyplot as plt
 
 from envs.car_racing import CarRacing
@@ -45,45 +44,48 @@ loaded_data = load_pickle_file(file_path)
 seed = 1000
 env = CarRacing()
 
-state, reward, done, info = env.step(np.array([0, 0, 0]))
-
-env.seed(seed) 
-env.reset()
-
-
-
-
   #parameters
-max_steps = 100  # 3000
-target_velocity = 20
+start_steps = 420 
 
-  #buffers
-pos_hist = []
-vel_hist = []
-action_hist = []
 
- # diffusion model buffers
-diffusion_pos_hist = []
-diffusion_action_hist = []
+
+# ----- Error buffers ----- #
+error_hist = []
+error_avg_hist = []
+error_velocity_buffer = deque(np.zeros(7), maxlen = 7)
+error_buffer = deque(np.zeros(10), maxlen = 10) # Buffer for storing errors for PID controller
+error_buffer_2 = deque(np.zeros(3), maxlen = 3) # Buffer for storing errors for PID controller
+
+#----- PID controllers ----- #
+pid_velocity = PID(0.005, 0.001, 0.0005, setpoint=20) # PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(0, 1))
+pid_steering = PID(0.8, 0.01, 0.06, setpoint=0) # If negative switch over to breaking pedal
+
+# -----  Run parameters ----- #
+strip_distance = 60 # x - coordinates of the strip
+car_pos_vector = np.array([70, 48])
+max_steps = 1000 # Max steps per episode
+wait_steps = 50 # Wait steps before starting to collect data
+
 
 # ======================  RUN ENVIRONMENT  ====================== #
-for i in range(max_steps):
-    observation = {
-      "image": state,
-      "velocity": np.linalg.norm(info['car_velocity_vector'])
-    }
-    print("Velocity: ", observation['velocity'])
-    action = calculateAction(observation, target_velocity)
-    state, reward, done, info = env.step(action)
+# Run twice
+for run in range(2):
+
+  #Initialize list for storing data -- will be sent to zarr replay buffer
+  img_hist, vel_hist ,act_hist, pos_hist = [], [], [], []
+  action = np.array([0, 0, 0], dtype=np.float32)
+  env.seed(seed)
+  env.reset()
+  obs, _ , done, info = env.step(action) # Take a step to get the environment started (action is empty)
+  
+  while not done:
+      if time.time() - start < 1: 
+          # We wait for 1 second
+          a = np.array([0.0, 0.0, 0.0])
+          s, r, done, info = env.step(a) # Step has to be called for the environment to continue
+          continue
 
 
-    pos_hist.append(info['car_position_vector'].copy())
-    action_hist.append(action.copy())
-    vel_hist.append(info['car_velocity_vector'].copy())
-
-    env.render()
-    if done:
-        break
 
 # ======================  PLOT RESULTS  ====================== #
 pos_hist = np.array(pos_hist)
