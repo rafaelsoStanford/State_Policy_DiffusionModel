@@ -205,7 +205,11 @@ class Diffusion_DDPM(pl.LightningModule):
                 positions_groundtruth = positions_groundtruth,
                 position_observation = position_observation,
                 actions_groundtruth = actions_groundtruth,
-                actions_observation = actions_observation)
+                actions_observation = actions_observation)  
+            
+            return sampling_history[-1] # (1, 1, pred_horizon, 5)
+            
+        
 
          # q(x_t | x_0)
     def q_forwardProcess(self, x_start, t, noise):
@@ -242,13 +246,7 @@ class Diffusion_DDPM(pl.LightningModule):
 
     # ==================== Helper functions ====================
     def prepare_pred_cond_vectors(self, batch):
-
-        # ---------------- Preparing Observation data ----------------
-        # normalized_img                                  = normalize_image( batch['image'][:,:self.obs_horizon ,:].to(self.device) ) 
-        # normalized_pos, translation_vec,  pos_stats     = normalize_position( batch['position'][:,:self.obs_horizon ,:].to(self.device)  )
-        # normalized_act                                  = normalize_action( batch['action'][:,:self.obs_horizon,:].to(self.device)  )
-        # normalized_vel                                  = normalize_velocity( batch['velocity'][:,:self.obs_horizon ,:].to(self.device)  )
-
+        
         normalized_img                                  =  batch['image'][:,:self.obs_horizon ,:].to(self.device) 
         normalized_pos                                  =  batch['position'][:,:self.obs_horizon ,:].to(self.device) 
         normalized_act                                  =  batch['action'][:,:self.obs_horizon,:].to(self.device) 

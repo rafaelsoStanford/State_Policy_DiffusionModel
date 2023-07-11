@@ -1,13 +1,10 @@
 
-import pytorch_lightning as pl
-from torch.utils.data import DataLoader, random_split
-from pytorch_lightning import loggers as pl_loggers
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging, ModelCheckpoint
 
 from models.diffusion_ddpm import *
 from models.diffusion_ddim import *
 from utils.load_data import *
+
+from envs.envWrapper import EnvWrapper
 
 import yaml
 
@@ -39,7 +36,7 @@ def main():
     model = Diffusion_DDPM.load_from_checkpoint( #Choose between DDPM and DDIM -- Model is inherited from DDPM thus they should be compatible
         path_checkpoint,
         hparams_file=path_hyperparams,
-        denosing_steps = 250
+        denosing_steps = 50
     )
     model.eval() 
 
@@ -47,6 +44,7 @@ def main():
     model_params = fetch_hyperparams_from_yaml(path_hyperparams)
     obs_horizon = model_params['obs_horizon']
     pred_horizon = model_params['pred_horizon']
+    inpaint_horizon = model_params['inpaint_horizon']
 
     # =========== Dataloader ===========
     # Dataset dir and filename
@@ -56,11 +54,28 @@ def main():
     test_dataloaders = dataset.val_dataloader()
 
     batch = next(iter(test_dataloaders))
-    model.sample(batch=batch, mode='test')
+    output = model.sample(batch=batch, mode='test')
+    inpaint = output[:inpaint_horizon, :]
+    prediction = output[inpaint_horizon:, :]
+    prediction_position = prediction[:, :2]
+    prediction_action = prediction[:, 2:]
+    pos0 = inpaint[-1, :2]
+    
+    # ===========  GymWrapper  ===========
+    env = EnvWrapper()
+    pos_history = []
+    env.reset_car(pos0[0], pos0[1])
+    for i in range(prediction.shape[0]):
+        info = env.step_noRender(prediction_action[i, :])
+        pos_history.append( info['car_position_vector'].copy() )
+    pos_history = np.array(pos_history)
+    env.close()
 
-    # # =========== Pytorch Lightning Trainer  ===========
-    # trainer = pl.Trainer(accelerator='gpu', devices=[0], precision=("16-mixed" if AMP else 32), max_epochs=n_epochs)
-    # trainer.test(model, dataloaders=test_dataloaders)
+    # ===========  Plotting  ===========
+    import matplotlib.pyplot as plt
+    plt.plot(pos_history[:, 0], pos_history[:, 1], 'r')
+    plt.plot(batch['position'][:, 0], batch['position'][:, 1], 'b')
+    plt.plot(prediction_position[:, 0], prediction_position[:, 1], 'g')
 
 if __name__ == "__main__":
     main()
