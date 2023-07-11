@@ -25,7 +25,18 @@ from utils.functions import *
 from utils.load_data import *
 from models.diffusion_ddpm import *
 
-# ======================  HELPER FUNCTIONS  ====================== #
+
+import pickle
+
+def load_pickle_file(file_path):
+    with open(file_path, 'rb') as file:
+        data = pickle.load(file)
+    return data
+
+# Example usage:
+file_path = 'data.pkl'
+loaded_data = load_pickle_file(file_path)
+
 
 
 
@@ -33,9 +44,14 @@ from models.diffusion_ddpm import *
 # ======================  INITIALIZATION  ====================== #
 seed = 1000
 env = CarRacing()
+
+state, reward, done, info = env.step(np.array([0, 0, 0]))
+
 env.seed(seed) 
 env.reset()
-state, reward, done, info = env.step(np.array([0, 0, 0]))
+
+
+
 
   #parameters
 max_steps = 100  # 3000
