@@ -5,6 +5,8 @@ import cv2
 from simple_pid import PID # Simple PID library by Brett Beauregard
 import yaml
 
+from utils.image_utils import *
+
 def findEdges(image):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask_green = cv2.inRange(hsv, (36, 25, 25), (70, 255, 255))
@@ -228,3 +230,65 @@ def fetch_hyperparams_from_yaml(file_path):
     with open(file_path, 'r') as file:
         hyperparams = yaml.safe_load(file)
     return hyperparams
+
+
+
+def trajectory_control(augmImg, 
+                       strip_distance, 
+                       car_pos_vector, 
+                       pid_steering, 
+                       pid_velocity, 
+                       error_buffer,
+                       error_buffer_2,
+                       error_velocity_buffer,
+                       v_wFrame,
+                       MODE):
+  
+    # ------ TRAJECTORY CONTROL ------ #
+    dict_masks = maskTrajecories(augmImg)
+    track_img = dict_masks[MODE] # Get the correct mask for the desired agent
+
+    # Get single line strip in front of car
+    line_strip = track_img[strip_distance, :]
+    idx = np.nonzero(line_strip)[0]
+
+    action = [0.0, 0.0, 0.0]  # Initialize the action variable
+
+    if len(idx) == 0: # Rarely happens, but sometimes at the thightest curve we lose intersection of strip with trajectory -> -1 angle
+        action[0] = -1.0
+        return action
+
+    idx = idx[np.argmin(np.abs(idx - 48))]
+    target_point = np.array([strip_distance, idx])
+    car2point_vector = target_point - car_pos_vector # As an approximation let angle be the x component of the car2point vector
+
+    # ------  PID CONTROL  ------ #
+    err =  idx - 48.0 # Correcting for the fact that negative value is a left turn, i.e., positive angle
+    err = np.clip(err, -5, 5) # Clip the error to avoid large changes of steering angle going to infinity
+    if np.linalg.norm(err) <= 2: # Attenuate errors close to target trajectory -- otherwise we get oscillations
+        err = 0.3 * err
+    # Buffer for error data -- used for smoothing the error signal -- Simple averaging filter over 10 steps and then 3 steps
+    error_buffer.append(err)
+    error_avg = sum(error_buffer) / len(error_buffer)
+    error_buffer_2.append(error_avg)
+    error_avg_2 = sum(error_buffer_2) / len(error_buffer_2)
+
+
+    angle = np.arctan2(abs(error_avg_2), abs(car2point_vector[0]))
+    if error_avg_2 > 0:
+        angle = -angle  # Negative angle is a left turn
+    action[0] = pid_steering(angle)
+
+    # ------  VELOCITY CONTROL  ------ #
+    error_vel = pid_velocity.setpoint - np.linalg.norm(v_wFrame)
+    error_velocity_buffer.append(error_vel)
+    error_vel_avg = sum(error_velocity_buffer) / len(error_velocity_buffer)
+
+    if error_vel_avg < -0.0:
+        action[1] = 0
+        action[2] = np.clip(np.linalg.norm(pid_velocity(np.linalg.norm(v_wFrame))), 0, 0.9)
+    else:
+        action[1] = pid_velocity(np.linalg.norm(v_wFrame))
+        action[2] = 0
+
+    return action
