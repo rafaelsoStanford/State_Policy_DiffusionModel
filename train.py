@@ -15,13 +15,13 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Training script')
     parser.add_argument('--n_epochs', type=int, default=500, help='Number of epochs')
     parser.add_argument('--amp', action='store_true', help='Enable Automatic Mixed Precision (AMP)')
-    parser.add_argument('--batch_size', type=int, default=8, help='Batch size')
+    parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
 
-    parser.add_argument('--obs_horizon', type=int, default=40, help='Observation horizon')
-    parser.add_argument('--pred_horizon', type=int, default=40, help='Prediction horizon')
+    parser.add_argument('--obs_horizon', type=int, default=20, help='Observation horizon')
+    parser.add_argument('--pred_horizon', type=int, default=20, help='Prediction horizon')
     parser.add_argument('--action_horizon', type=int, default=1, help='Action horizon')
-    parser.add_argument('--inpaint_horizon', type=int, default=5, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
+    parser.add_argument('--inpaint_horizon', type=int, default=10, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
     parser.add_argument('--noise_steps', type=int, default=1000, help='Denoising steps')
     
     parser.add_argument('--cond_dim', type=int, default=128+2+3+2, help='Dimension of diffusion input state')
@@ -30,7 +30,7 @@ def parse_arguments():
     parser.add_argument('--noise_scheduler', type=str, default='linear', help='String for choosing noise scheduler')
 
     parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
-    parser.add_argument('--dataset', type=str, default='2023-07-09-1800_dataset_1_episodes_1_modes.zarr.zip', help='zarr.zip dataset filename')
+    parser.add_argument('--dataset', type=str, default='TestingActions_dataset_5_episodes_3_modes.zarr.zip', help='zarr.zip dataset filename')
     
     return parser.parse_args()
 
@@ -84,6 +84,17 @@ def main(args):
                     inpaint_horizon=inpaint_horizon,
                     noise_scheduler=noise_scheduler,
     )
+    
+    # batch = next(iter(train_dataloader))
+    # pos_sample = batch['position']
+    # for i , sample in enumerate(pos_sample):
+    #     plt.plot(pos_sample[i,:,0], pos_sample[i,:,1], 'r')
+    #     plt.scatter(0,0, c='b')
+    #     plt.scatter(1,1 , c='b')
+    #     plt.scatter(-1,-1 , c='b')
+        
+    #     plt.show()
+    
 
     # ===========trainer===========
     # -----PL configs-----

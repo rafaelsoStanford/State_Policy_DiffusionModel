@@ -134,7 +134,6 @@ class Diffusion_DDPM(pl.LightningModule):
         }
 
 # ==================== Noising / Denoising Processes ====================
-
     def onepass(self, batch, batch_idx, mode="train"):
         # ---------------- Preparing Observation / Prediction data ----------------
         x_0 , obs_cond = self.prepare_pred_cond_vectors(batch)
@@ -245,15 +244,15 @@ class Diffusion_DDPM(pl.LightningModule):
     def prepare_pred_cond_vectors(self, batch):
 
         # ---------------- Preparing Observation data ----------------
-        normalized_img                                  = normalize_image( batch['image'][:,:self.obs_horizon ,:].to(self.device) ) 
-        normalized_pos, translation_vec,  pos_stats     = normalize_position( batch['position'][:,:self.obs_horizon ,:].to(self.device)  )
-        normalized_act                                  = normalize_action( batch['action'][:,:self.obs_horizon,:].to(self.device)  )
-        normalized_vel                                  = normalize_velocity( batch['velocity'][:,:self.obs_horizon ,:].to(self.device)  )
-        
-        # normalized_img = normalized_img.to(self.device)
-        # normalized_pos = normalized_pos.to(self.device)
-        # normalized_act = normalized_act.to(self.device)
-        # normalized_vel = normalized_vel.to(self.device)
+        # normalized_img                                  = normalize_image( batch['image'][:,:self.obs_horizon ,:].to(self.device) ) 
+        # normalized_pos, translation_vec,  pos_stats     = normalize_position( batch['position'][:,:self.obs_horizon ,:].to(self.device)  )
+        # normalized_act                                  = normalize_action( batch['action'][:,:self.obs_horizon,:].to(self.device)  )
+        # normalized_vel                                  = normalize_velocity( batch['velocity'][:,:self.obs_horizon ,:].to(self.device)  )
+
+        normalized_img                                  =  batch['image'][:,:self.obs_horizon ,:].to(self.device) 
+        normalized_pos                                  =  batch['position'][:,:self.obs_horizon ,:].to(self.device) 
+        normalized_act                                  =  batch['action'][:,:self.obs_horizon,:].to(self.device) 
+        normalized_vel                                  =  batch['velocity'][:,:self.obs_horizon ,:].to(self.device) 
 
         # ---------------- Encoding Image data ----------------
         encoded_img = self.vision_encoder(normalized_img.flatten(end_dim=1)) # (B, 128)
@@ -264,18 +263,14 @@ class Diffusion_DDPM(pl.LightningModule):
         obs_cond = torch.cat([normalized_pos, normalized_act,normalized_vel, image_features], dim=-1) # (B, t_0:t_obs, 512 + 3 + 2)
 
         # ---------------- Preparing Prediction data (acts as ground truth) ----------------
-        x_0_pos = normalize_batch(batch['position'][:,self.obs_horizon: ,:].to(self.device), pos_stats) # (B, t_obs:t_pred , 2)
-        x_0_pos = (x_0_pos - translation_vec[:, None, :]) / 2.0 # Normalizing to the same frame as the observation data
-        x_0_act = normalize_action(batch['action'][:, self.obs_horizon: ,:].to(self.device)) # (B, t_obs:t_pred, 3)
+        x_0_pos = batch['position'][:,self.obs_horizon: ,:].to(self.device) # (B, t_obs:t_pred , 2)
+        #x_0_pos = (x_0_pos - translation_vec[:, None, :]) / 2.0 # Normalizing to the same frame as the observation data
+        x_0_act = batch['action'][:, self.obs_horizon: ,:].to(self.device) # (B, t_obs:t_pred, 3)
         x_0 = torch.cat([x_0_pos, x_0_act], dim=-1) # (B, t_obs:t_pred, 5)
 
-        
         # Adding past obervation as inpainting condition
         x_0 = torch.cat((obs_cond[:, -self.inpaint_horizon:, :5], x_0) , dim=1) # Concat in time dim
 
         # ---------------- Assert cond dimensions compatible with model (important when preloading / changing conditioning data) ----------------
         assert(obs_cond.shape[-1]*self.obs_horizon == self.noise_estimator.down1.cond_encoder[2].state_dict()['weight'].shape[1]) # Check if cond dim is correct
         return x_0 , obs_cond
-
-
-

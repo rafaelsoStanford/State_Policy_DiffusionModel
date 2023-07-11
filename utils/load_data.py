@@ -78,6 +78,25 @@ def create_sample_indices(
     indices = np.array(indices)
     return indices
 
+def sample_sequence_array(train_data, sequence_length,
+                    buffer_start_idx, buffer_end_idx,
+                    sample_start_idx, sample_end_idx):
+    result = dict()
+    input_array = train_data
+    sample = input_array[buffer_start_idx:buffer_end_idx]
+    data = sample
+    if (sample_start_idx > 0) or (sample_end_idx < sequence_length):
+        data = np.zeros(
+            shape=(sequence_length,) + input_array.shape[1:],
+            dtype=input_array.dtype)
+        if sample_start_idx > 0:
+            data[:sample_start_idx] = sample[0]
+        if sample_end_idx < sequence_length:
+            data[sample_end_idx:] = sample[-1]
+        data[sample_start_idx:sample_end_idx] = sample
+    result = data
+    return result
+
 def sample_sequence(train_data, sequence_length,
                     buffer_start_idx, buffer_end_idx,
                     sample_start_idx, sample_end_idx):
@@ -123,7 +142,6 @@ class CarRacingDataset(torch.utils.data.Dataset):
         train_image_data = dataset_root['data']['img'][:]
         train_image_data = np.moveaxis(train_image_data, -1,1)
 
-
         # (N, D)
         train_data = {
             # Create Prediction Targets
@@ -133,23 +151,38 @@ class CarRacingDataset(torch.utils.data.Dataset):
         }
         episode_ends = dataset_root['meta']['episode_ends'][:]
 
-
         indices = create_sample_indices(
             episode_ends=episode_ends,
             sequence_length= obs_horizon+pred_horizon,
             pad_before= 0,
             pad_after= 0)
-
         
-
         # ========== Normalize Actions ============ 
+        position_mins = []
+        position_maxs = []
+        for i in range(len(indices)):
+            # Get sequence:
+            buffer_start_idx, buffer_end_idx, sample_start_idx, sample_end_idx = indices[i]
+            sample = sample_sequence_array(
+                        train_data= train_data['position'],
+                        sequence_length=    obs_horizon + pred_horizon,
+                        buffer_start_idx=   buffer_start_idx,
+                        buffer_end_idx=     buffer_end_idx,
+                        sample_start_idx=   sample_start_idx,
+                        sample_end_idx=     sample_end_idx
+                    )
+            localStats = get_data_stats(sample)
+            position_maxs.append(localStats['max'])
+            position_mins.append(localStats['min'])
+        self.pos_stats = {'max': np.average(position_maxs), 'min': np.average(position_mins)}
+        
+        
+        
         # normalized data to [-1,1], images are assumed to be normalized 
-        stats = dict()
         action_stats = get_data_stats(train_data['action'])
         normalized_action_data = normalize_data(train_data['action'], action_stats)
         vel_stats = get_data_stats(train_data['velocity'])
         normalized_velocity_data = normalize_data(train_data['velocity'], vel_stats)
-
         self.action_stats = action_stats
         self.vel_stats = vel_stats
 
@@ -180,6 +213,13 @@ class CarRacingDataset(torch.utils.data.Dataset):
             sample_start_idx=   sample_start_idx,
             sample_end_idx=     sample_end_idx
         )
+        
+        # ========== normalize sample ============
+        # sample_stat = get_data_stats(nsample['position'])
+        sample_normalized = normalize_data(nsample['position'], self.pos_stats)
+        translation_vec = sample_normalized[0,:]
+        nsample_centered = sample_normalized - translation_vec
+        nsample['position'] = nsample_centered / 2.0
 
         return nsample
 
@@ -217,6 +257,6 @@ class CarRacingDataModule(pl.LightningDataModule):
     
     def save_min_max(self, path):
         with open(path, 'wb') as f:
-            pickle.dump([self.data_full.action_stats, self.data_full.vel_stats], f)
+            pickle.dump([self.data_full.pos_stats,  self.data_full.action_stats, self.data_full.vel_stats], f)
             
             
