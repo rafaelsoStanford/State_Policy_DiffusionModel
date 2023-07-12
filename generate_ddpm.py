@@ -36,7 +36,6 @@ def main():
     model = Diffusion_DDPM.load_from_checkpoint( #Choose between DDPM and DDIM -- Model is inherited from DDPM thus they should be compatible
         path_checkpoint,
         hparams_file=path_hyperparams,
-        denosing_steps = 50
     )
     model.eval() 
 
@@ -54,12 +53,12 @@ def main():
     test_dataloaders = dataset.val_dataloader()
 
     batch = next(iter(test_dataloaders))
-    output = model.sample(batch=batch, mode='test')
+    output = model.sample(batch=batch, mode='test', denoising_steps=200)
     inpaint = output[:inpaint_horizon, :]
     prediction = output[inpaint_horizon:, :]
     prediction_position = prediction[:, :2]
     prediction_action = prediction[:, 2:]
-    pos0 = inpaint[-1, :2]
+    pos0 = unnormalize_data(inpaint[-1, :2], stats= dataset.stats['position'])
     
     # ===========  GymWrapper  ===========
     env = EnvWrapper()
@@ -74,8 +73,9 @@ def main():
     # ===========  Plotting  ===========
     import matplotlib.pyplot as plt
     plt.plot(pos_history[:, 0], pos_history[:, 1], 'r')
-    plt.plot(batch['position'][:, 0], batch['position'][:, 1], 'b')
-    plt.plot(prediction_position[:, 0], prediction_position[:, 1], 'g')
+    #plt.plot(batch['position'].squeeze()[:, 0], batch['position'].squeeze()[:, 1], 'b')
+    #plt.plot(prediction_position[:, 0], prediction_position[:, 1], 'g')
+    plt.show()
 
 if __name__ == "__main__":
     main()

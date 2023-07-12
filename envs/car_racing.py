@@ -173,9 +173,11 @@ class CarRacing(gym.Env, EzPickle):
     def return_absolute_velocity(self):
         return np.linalg.norm(self.car.hull.linearVelocity)
     
+
     def return_velocity_vector(self):
         return self.car.hull.linearVelocity
     
+
     def _destroy(self):
         if not self.road:
             return
@@ -475,6 +477,7 @@ class CarRacing(gym.Env, EzPickle):
                 'car_position_vector': self.return_carPosition(),
                 'car_velocity_vector': self.car.hull.linearVelocity,
             }
+
 
         return self.state, step_reward, done, info
     

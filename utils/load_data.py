@@ -174,7 +174,7 @@ class CarRacingDataset(torch.utils.data.Dataset):
             localStats = get_data_stats(sample)
             position_maxs.append(localStats['max'])
             position_mins.append(localStats['min'])
-        self.pos_stats = {'max': np.average(position_maxs), 'min': np.average(position_mins)}
+        pos_stats = {'max': np.average(position_maxs), 'min': np.average(position_mins)}
         
         
         
@@ -195,6 +195,7 @@ class CarRacingDataset(torch.utils.data.Dataset):
         self.pred_horizon = pred_horizon
         self.action_horizon = action_horizon
         self.obs_horizon = obs_horizon
+        self.stats = {'position': pos_stats, 'velocity': vel_stats, 'action': action_stats}
 
     def __len__(self):
         return len(self.indices)
@@ -216,7 +217,7 @@ class CarRacingDataset(torch.utils.data.Dataset):
         
         # ========== normalize sample ============
         # sample_stat = get_data_stats(nsample['position'])
-        sample_normalized = normalize_data(nsample['position'], self.pos_stats)
+        sample_normalized = normalize_data(nsample['position'], self.stats['position'])
         translation_vec = sample_normalized[0,:]
         nsample_centered = sample_normalized - translation_vec
         nsample['position'] = nsample_centered / 2.0
@@ -245,6 +246,7 @@ class CarRacingDataModule(pl.LightningDataModule):
                                             obs_horizon=self.T_obs,
                                             action_horizon=self.T_act,
                                             )
+        self.stats = self.data_full.stats
         if self.seed:
             self.data_train, self.data_val = random_split(self.data_full, [int(len(self.data_full)*0.8), len(self.data_full) - int(len(self.data_full)*0.8)], generator=torch.Generator().manual_seed(self.seed))
         else:

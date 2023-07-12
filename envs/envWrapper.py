@@ -1,4 +1,6 @@
 from envs.car_racing import CarRacing
+import numpy as np
+import Box2D
 
 FPS = 50  # Frames per second
 
@@ -26,7 +28,7 @@ class EnvWrapper(CarRacing):
     
     def reset_car(self, x, y):
         state = super().reset()
-        self.car.hull.position = (x, y) # Overwrite the car position
+        self.car.hull.position = Box2D.b2Vec2(float(x),float(y))
         return state
 
     def close(self):

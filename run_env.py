@@ -232,9 +232,8 @@ for run in range(2):
       nsample['image'] = np.moveaxis(nsample['image'], -1,1)
       nsample['image'] = torch.from_numpy(nsample['image'])
 
-      actions , position predicted = model.sample(batch= nsample, mode='test')
-      for each action 
-         position = step(a)
+      model.sample(batch= nsample, mode='test')
+
     
     
     
