@@ -259,6 +259,6 @@ class CarRacingDataModule(pl.LightningDataModule):
     
     def save_min_max(self, path):
         with open(path, 'wb') as f:
-            pickle.dump([self.data_full.pos_stats,  self.data_full.action_stats, self.data_full.vel_stats], f)
+            pickle.dump([self.data_full.stats], f)
             
             
