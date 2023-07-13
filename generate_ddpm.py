@@ -16,7 +16,7 @@ def fetch_hyperparams_from_yaml(file_path):
     return hyperparams
 
 
-
+# TODO: This code needs to be cleaned up.
 
 
 ############################
@@ -67,10 +67,13 @@ def main():
     dataset.setup( name = dataset_name )
     test_dataloaders = dataset.val_dataloader()
 
+    # TODO: We only use a single batch, which begs the question on why using a dataloader in the first place.
     # ---- get a batch of data ----
     batch = next(iter(test_dataloaders))
     x_0_predicted , _ , _ = model.sample(batch=batch[0], mode='validation')
+    
     # ---- seperate position / action ----
+    # TODO: Very dirty, should be cleaned up
     output = x_0_predicted.squeeze().cpu().detach().numpy()
     
     inpaint = unnormalize_data(2* output[:inpaint_horizon, :2] + batch[1].detach().cpu().numpy() , stats= pos_stats)
@@ -108,6 +111,7 @@ def main():
     env.close()
 
     # ===========  Plotting  ===========
+    # TODO: Plotting should be moved to a seperate file
     fig = plt.figure()
     fig.clf()
     # Create a colormap for fading colors based on the number of timesteps
@@ -138,8 +142,6 @@ def main():
     plt.scatter(pos0[0], pos0[1], c='g', label='Start position', s = 10)
     # Draw velocity vector at start position
     plt.arrow(pos0[0], pos0[1], vel0[0], vel0[1], width=0.01, color='g', label='Start velocity')
-
-    
     # Add legend
     plt.legend()
     # Show the plot
