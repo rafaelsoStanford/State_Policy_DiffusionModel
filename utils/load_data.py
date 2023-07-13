@@ -262,3 +262,131 @@ class CarRacingDataModule(pl.LightningDataModule):
             pickle.dump([self.data_full.stats], f)
             
             
+            
+            
+            
+class CarRacingDataset_forInference(torch.utils.data.Dataset):
+    def __init__(self,
+                 dataset_path: str,
+                 pred_horizon: int,
+                 obs_horizon: int,
+                 action_horizon: int,
+                 stats
+                 ):
+        
+        self.obs_horizon = obs_horizon
+        self.pred_horizon = pred_horizon
+        self.sequence_len = obs_horizon + pred_horizon # chunk lenght of data
+        self.train_data = {}
+        self.stats = stats
+
+        print("Loading Data from Zarr File")
+
+        # read from zarr dataset
+        dataset_root = zarr.open(dataset_path, 'r')
+
+        # float32, [0,1], (N,96,96,3)
+        train_image_data = dataset_root['data']['img'][:]
+        train_image_data = np.moveaxis(train_image_data, -1,1)
+
+        # (N, D)
+        train_data = {
+            # Create Prediction Targets
+            'position': dataset_root['data']['position'][:], # (T,2)
+            'velocity': dataset_root['data']['velocity'][:], # (T,2)
+            'action': dataset_root['data']['action'][:] #(T,3)
+        }
+        episode_ends = dataset_root['meta']['episode_ends'][:]
+
+        indices = create_sample_indices(
+            episode_ends=episode_ends,
+            sequence_length= obs_horizon+pred_horizon,
+            pad_before= 0,
+            pad_after= 0)
+        
+        # ========== Normalize Actions ============ 
+
+        
+        
+        # normalized data to [-1,1], images are assumed to be normalized 
+
+        normalized_action_data = normalize_data(train_data['action'], stats=stats[0]['action'])
+        normalized_velocity_data = normalize_data(train_data['velocity'], stats=stats[0]['velocity'])
+
+
+        self.train_data['position'] = train_data['position']
+        self.train_data['velocity'] = normalized_velocity_data #train_data['velocity']
+        self.train_data['action'] = normalized_action_data #train_data['action']
+        self.train_data['image'] = train_image_data
+
+        self.indices = indices
+        self.pred_horizon = pred_horizon
+        self.action_horizon = action_horizon
+        self.obs_horizon = obs_horizon
+
+
+    def __len__(self):
+        return len(self.indices)
+    
+    def __getitem__(self, idx):
+        # get the start/end indices for this datapoint
+        buffer_start_idx, buffer_end_idx, \
+            sample_start_idx, sample_end_idx = self.indices[idx]
+
+        # get nomralized data using these indices
+        nsample = sample_sequence(
+            train_data=self.train_data,
+            sequence_length=    self.sequence_len,
+            buffer_start_idx=   buffer_start_idx,
+            buffer_end_idx=     buffer_end_idx,
+            sample_start_idx=   sample_start_idx,
+            sample_end_idx=     sample_end_idx
+        )
+        
+        # ========== normalize sample ============
+        # sample_stat = get_data_stats(nsample['position'])
+        sample_normalized = normalize_data(nsample['position'], self.stats[0]['position'])
+        translation_vec = sample_normalized[0,:]
+        nsample_centered = sample_normalized - translation_vec
+        nsample['position'] = nsample_centered / 2.0
+
+        return nsample , translation_vec
+    
+    
+    
+    
+    
+    
+class CarRacingDataModule_forInference(pl.LightningDataModule):
+    def __init__(self, batch_size,  data_dir: str = "path/to/dir" , T_obs=4, T_pred=8 , T_act =1, seed=None, stats=None):
+        super().__init__()
+        self.data_dir = data_dir
+        self.batch_size = batch_size
+        self.T_obs = T_obs
+        self.T_pred = T_pred
+        self.T_act = T_act
+
+        self.data_train = None
+        self.data_val = None
+        self.seed = seed
+        self.stats = stats
+
+    def setup(self, name: str = None , stats=None):
+        # ----- CarRacingDataset is a Dataloader file, takes care of normalization and such-----
+        self.data_full = CarRacingDataset_forInference(  dataset_path= os.path.join(self.data_dir, name),
+                                                        pred_horizon=self.T_pred,
+                                                        obs_horizon=self.T_obs,
+                                                        action_horizon=self.T_act,
+                                                        stats= self.stats
+                                                        )
+
+        if self.seed:
+            self.data_train, self.data_val = random_split(self.data_full, [int(len(self.data_full)*0.8), len(self.data_full) - int(len(self.data_full)*0.8)], generator=torch.Generator().manual_seed(self.seed))
+        else:
+            self.data_train, self.data_val = random_split(self.data_full, [int(len(self.data_full)*0.8), len(self.data_full) - int(len(self.data_full)*0.8)])
+    def train_dataloader(self):
+        return DataLoader(self.data_train, batch_size=self.batch_size, shuffle=True, num_workers=4)
+
+    def val_dataloader(self):
+        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=False, num_workers=4)
+    

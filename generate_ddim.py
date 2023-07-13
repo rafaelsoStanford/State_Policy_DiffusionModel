@@ -51,10 +51,6 @@ def main():
     batch = next(iter(test_dataloaders))
     model.sample(batch=batch, step_size=50, ddpm_steps = 50)
 
-    # # =========== Pytorch Lightning Trainer  ===========
-    # trainer = pl.Trainer(accelerator='gpu', devices=[0], precision=("16-mixed" if AMP else 32), max_epochs=n_epochs)
-    # trainer.test(model, dataloaders=test_dataloaders)
-
 if __name__ == "__main__":
     main()
     
