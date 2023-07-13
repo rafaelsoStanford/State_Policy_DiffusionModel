@@ -245,7 +245,7 @@ def trajectory_control(augmImg,
                        MODE):
   
     # ------ TRAJECTORY CONTROL ------ #
-    dict_masks = maskTrajecories(augmImg)
+    dict_masks = maskTrajectories(augmImg)
     track_img = dict_masks[MODE] # Get the correct mask for the desired agent
 
     # Get single line strip in front of car

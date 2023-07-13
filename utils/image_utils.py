@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 
-def maskTrajecories(image):
+def maskTrajectories(image):
     # Define the threshold ranges for each mask
     lower_yellow = np.array([100, 100, 0], dtype=np.uint8) ## Left of track in grass
     upper_yellow = np.array([255, 255, 0], dtype=np.uint8)
