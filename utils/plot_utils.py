@@ -85,13 +85,18 @@ def plt2tsb(figure, writer, fig_name, niter):
     buf.close()
 
 
-def plt_toTensorboard(self,
-    position_observation,   
-    positions_groundtruth,
-    positions_predicted,
-    actions_predicted,
-    actions_groundtruth,
-    actions_observation):
+def plt_toTensorboard(self, pred,  obs_cond, x_0):
+    
+    position_observation = obs_cond.squeeze()[:, :2].detach().cpu().numpy() 
+    actions_observation = obs_cond.squeeze()[:, 2:].detach().cpu().numpy()
+
+    positions_groundtruth = x_0.squeeze()[:, :2].detach().cpu().numpy() #(20 , 2)
+    actions_groundtruth = x_0.squeeze()[:, 2:].squeeze().detach().cpu().numpy() #(20 , 3)
+    
+    # Predictions
+    positions_predicted = pred.squeeze()[:, :2].detach().cpu().numpy() #(20 , 2)
+    actions_predicted = pred.squeeze()[:, 2:].detach().cpu().numpy() #(20 , 3)
+        
     # ---------------- Plotting ----------------
     writer = self.logger.experiment
     niter  = self.global_step

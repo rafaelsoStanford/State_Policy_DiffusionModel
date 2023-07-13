@@ -85,17 +85,6 @@ def main(args):
                     noise_scheduler=noise_scheduler,
     )
     
-    # batch = next(iter(train_dataloader))
-    # pos_sample = batch['position']
-    # for i , sample in enumerate(pos_sample):
-    #     plt.plot(pos_sample[i,:,0], pos_sample[i,:,1], 'r')
-    #     plt.scatter(0,0, c='b')
-    #     plt.scatter(1,1 , c='b')
-    #     plt.scatter(-1,-1 , c='b')
-        
-    #     plt.show()
-    
-
     # ===========trainer===========
     # -----PL configs-----
     tensorboard = pl_loggers.TensorBoardLogger(save_dir="tb_logs/",name='',flush_secs=1)

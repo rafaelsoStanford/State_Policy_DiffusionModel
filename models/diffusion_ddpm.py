@@ -19,7 +19,6 @@ from utils.data_utils import *
 class Diffusion_DDPM(pl.LightningModule):
     def __init__(self
                 , noise_steps=1000
-                , denoising_steps=1000
                 , obs_horizon = 10
                 , pred_horizon= 10
                 , observation_dim = 2
@@ -29,7 +28,7 @@ class Diffusion_DDPM(pl.LightningModule):
                 , vision_encoder = None
                 , noise_scheduler = 'linear'
                 , inpaint_horizon = 10
-                 ):
+                ):
         super().__init__()
 
         self.save_hyperparameters()
@@ -37,7 +36,6 @@ class Diffusion_DDPM(pl.LightningModule):
 # ==================== Init ====================
     # --------------------- Diffusion params ---------------------
         self.noise_steps = self.hparams.noise_steps
-        self.denoising_steps = self.hparams.denoising_steps
         self.NoiseScheduler = None
         self.obs_horizon = obs_horizon
         self.pred_horizon = pred_horizon
@@ -87,7 +85,6 @@ class Diffusion_DDPM(pl.LightningModule):
         if vision_encoder == 'resnet18':
             print("Loading Resnet18")
             self.vision_encoder = VisionEncoder() # Loads pretrained weights of Resnet18 with output dim 512 (also modified layers as Suggested by Song et al.)
-        
         else:
             print("Loading lightweight Autoencoder")
             vision = autoencoder.load_from_checkpoint(checkpoint_path="./tb_logs_autoencoder/version_23/checkpoints/epoch=25.ckpt")
@@ -98,7 +95,15 @@ class Diffusion_DDPM(pl.LightningModule):
         # --------------------- Output environment settings ---------------------
         if os.getenv("LOCAL_RANK", '0') == '0':
             print_hyperparameters(
-            obs_horizon, pred_horizon, observation_dim, prediction_dim, noise_steps, inpaint_horizon, model, learning_rate, vision_encoder)
+                                obs_horizon, 
+                                pred_horizon, 
+                                observation_dim, 
+                                prediction_dim, 
+                                noise_steps, 
+                                inpaint_horizon, 
+                                model, 
+                                learning_rate, 
+                                vision_encoder)
             # print("Model Architecture: ", self.noise_estimator)
 
 # ==================== Training ====================
@@ -116,14 +121,21 @@ class Diffusion_DDPM(pl.LightningModule):
 # ==================== Validation ====================    
     def validation_step(self, batch, batch_idx):
         if batch_idx == 0:
-            self.sample(batch, mode="validation")
+            x_0_predicted , x_0, obs_cond = self.sample(batch, mode="validation")
+            # Plot to tensorboard
+            plt_toTensorboard(self,
+                x_0=x_0,
+                pred=x_0_predicted,
+                obs_cond=obs_cond,
+            )
+            
         loss = self.onepass(batch, batch_idx, mode="validation")
         self.log("val_loss",loss,  sync_dist=True)
         return loss
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', verbose=True, patience=5) # patience in the unit of epoch
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', verbose=True, patience=5)
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
@@ -148,74 +160,47 @@ class Diffusion_DDPM(pl.LightningModule):
         x_noisy = self.add_constraints(x_noisy, x_0)
 
         # ---------------- Estimate noise / Single Backward process ----------------
-        # Estimate noise using noise_predictor
-        if mode == "train":
-            noise_estimated = self.noise_estimator(x_noisy, t, obs_cond)
-        else:
-            with torch.no_grad():
-                noise_estimated = self.noise_estimator(x_noisy, t, obs_cond)
+        noise_estimated = self.noise_estimator(x_noisy, t, obs_cond)
 
         # ----------------  Loss ----------------
         loss = self.loss(noise, noise_estimated) #MSE Loss
         return loss
     
 # ==================== Sampling ====================
-    def sample(self, batch, mode):
+    def sample(self, batch, mode, denoising_steps = 1000):
         # ---------------- Prepare Data ----------------
         x_0 , obs_cond = self.prepare_pred_cond_vectors(batch)
         x_0 = x_0[0,...].unsqueeze(0).unsqueeze(1)
         obs_cond = obs_cond[0,...].unsqueeze(0).unsqueeze(1)
-        # Observations ie Past
-        position_observation = obs_cond.squeeze()[:, :2].detach().cpu().numpy() 
-        actions_observation = obs_cond.squeeze()[:, 2:].detach().cpu().numpy()
-
-        positions_groundtruth = x_0.squeeze()[:, :2].detach().cpu().numpy() #(20 , 2)
-        actions_groundtruth = x_0.squeeze()[:, 2:].squeeze().detach().cpu().numpy() #(20 , 3)
     
-        # ---------------- Plotting ----------------
         if mode == 'validation':
-            x_0_predicted = self.p_reverseProcess_loop(x_cond = obs_cond, x_0 = x_0) # Only one batch is used to be visualized
-
-            # Predictions
-            positions_predicted = x_0_predicted.squeeze()[:, :2].detach().cpu().numpy() #(20 , 2)
-            actions_predicted = x_0_predicted.squeeze()[:, 2:].detach().cpu().numpy() #(20 , 3)
-
-            # Plot to tensorboard
-            plt_toTensorboard(self,
-                positions_predicted = positions_predicted,
-                positions_groundtruth = positions_groundtruth,
-                position_observation = position_observation,
-                actions_predicted = actions_predicted,
-                actions_groundtruth = actions_groundtruth,
-                actions_observation = actions_observation,
-            )
+            x_0_predicted = self.p_reverseProcess_loop(x_cond = obs_cond, x_0 = x_0)
+            return x_0_predicted , x_0, obs_cond
             
         if mode == 'test':
-            # Sample and save to video
             sampling_history = []
-            x_t = torch.rand(1, 1, self.pred_horizon + self.inpaint_horizon, self.prediction_dim, device=self.device)
+            with torch.no_grad():
+                x_t = torch.rand(1, 1, self.pred_horizon + self.inpaint_horizon, self.prediction_dim, device=self.device)
 
-            for t in reversed(range(0,self.denoising_steps)): # t ranges from denoising_steps-1 to 0
-                x_t =  self.p_reverseProcess(obs_cond,  x_t,  t)
-                x_t = self.add_constraints(x_t, x_0)
-                sampling_history.append(x_t.squeeze().detach().cpu().numpy())
-            
-            plt_toVideo(self,
-                sampling_history,
-                positions_groundtruth = positions_groundtruth,
-                position_observation = position_observation,
-                actions_groundtruth = actions_groundtruth,
-                actions_observation = actions_observation)
+                for t in reversed(range(0, denoising_steps)): # t ranges from denoising_steps-1 to 0
+                    x_t =  self.p_reverseProcess(obs_cond,  x_t,  t)
+                    x_t = self.add_constraints(x_t, x_0)
+                    sampling_history.append(x_t.squeeze().detach().cpu().numpy())
+                    
+            return sampling_history , x_0
 
-         # q(x_t | x_0)
+    # q(x_t | x_0)
     def q_forwardProcess(self, x_start, t, noise):
-        x_t = torch.sqrt(self.alphas_cumprod[t])[:,None,None,None] * x_start + torch.sqrt(1-self.alphas_cumprod[t])[:,None,None,None] * noise
+        x_t = torch.sqrt(self.alphas_cumprod[t])[:,None,None,None] \
+                * x_start + torch.sqrt(1-self.alphas_cumprod[t])[:,None,None,None] * noise
         return x_t
 
+    # p(x_t-1 | x_t)
     @torch.no_grad()
     def p_reverseProcess_loop(self, x_cond, x_0 , x_T = None):
         if x_T is None:
-            x_t = torch.rand(1, 1, self.pred_horizon + self.inpaint_horizon, self.prediction_dim, device=self.device) + x_0[:, : , self.inpaint_horizon, :]
+            x_t = torch.rand(1, 1, self.pred_horizon + self.inpaint_horizon, self.prediction_dim, device=self.device) \
+                    + x_0[:, : , self.inpaint_horizon, :]
         else:
             x_t = x_T
         
@@ -233,26 +218,22 @@ class Diffusion_DDPM(pl.LightningModule):
         else:
             z = torch.randn_like(x_t)
         est_noise = self.noise_estimator(x_t, torch.tensor([t], device=self.device), x_cond)
-        x_t = 1/torch.sqrt(self.alphas[t])* (x_t-(1-self.alphas[t])/torch.sqrt(1-self.alphas_cumprod[t])*est_noise) +  torch.sqrt(self.betas[t])*z
+        x_t = 1/torch.sqrt(self.alphas[t]) \
+                * (x_t-(1-self.alphas[t])/torch.sqrt(1-self.alphas_cumprod[t])*est_noise) \
+                        +  torch.sqrt(self.betas[t])*z
         return x_t
 
     def add_constraints(self, x_t , x_0):
-        x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :].clone() # inpaint datapoints 
+        x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :].clone()
         return x_t
 
     # ==================== Helper functions ====================
     def prepare_pred_cond_vectors(self, batch):
-
-        # ---------------- Preparing Observation data ----------------
-        # normalized_img                                  = normalize_image( batch['image'][:,:self.obs_horizon ,:].to(self.device) ) 
-        # normalized_pos, translation_vec,  pos_stats     = normalize_position( batch['position'][:,:self.obs_horizon ,:].to(self.device)  )
-        # normalized_act                                  = normalize_action( batch['action'][:,:self.obs_horizon,:].to(self.device)  )
-        # normalized_vel                                  = normalize_velocity( batch['velocity'][:,:self.obs_horizon ,:].to(self.device)  )
-
-        normalized_img                                  =  batch['image'][:,:self.obs_horizon ,:].to(self.device) 
-        normalized_pos                                  =  batch['position'][:,:self.obs_horizon ,:].to(self.device) 
-        normalized_act                                  =  batch['action'][:,:self.obs_horizon,:].to(self.device) 
-        normalized_vel                                  =  batch['velocity'][:,:self.obs_horizon ,:].to(self.device) 
+        
+        normalized_img    =  batch['image'][:,:self.obs_horizon ,:].to(self.device) 
+        normalized_pos    =  batch['position'][:,:self.obs_horizon ,:].to(self.device) 
+        normalized_act    =  batch['action'][:,:self.obs_horizon,:].to(self.device) 
+        normalized_vel    =  batch['velocity'][:,:self.obs_horizon ,:].to(self.device) 
 
         # ---------------- Encoding Image data ----------------
         encoded_img = self.vision_encoder(normalized_img.flatten(end_dim=1)) # (B, 128)
@@ -260,11 +241,10 @@ class Diffusion_DDPM(pl.LightningModule):
 
         # ---------------- Conditional vector ----------------
         # Concatenate position and action data and image features
-        obs_cond = torch.cat([normalized_pos, normalized_act,normalized_vel, image_features], dim=-1) # (B, t_0:t_obs, 512 + 3 + 2)
+        obs_cond = torch.cat([normalized_pos, normalized_act,normalized_vel, image_features], dim=-1) # (B, t_0:t_obs, 2 + 3 + 2 + 128)
 
         # ---------------- Preparing Prediction data (acts as ground truth) ----------------
         x_0_pos = batch['position'][:,self.obs_horizon: ,:].to(self.device) # (B, t_obs:t_pred , 2)
-        #x_0_pos = (x_0_pos - translation_vec[:, None, :]) / 2.0 # Normalizing to the same frame as the observation data
         x_0_act = batch['action'][:, self.obs_horizon: ,:].to(self.device) # (B, t_obs:t_pred, 3)
         x_0 = torch.cat([x_0_pos, x_0_act], dim=-1) # (B, t_obs:t_pred, 5)
 
