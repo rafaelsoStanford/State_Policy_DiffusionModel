@@ -40,7 +40,7 @@ def findClosestPoint(trajectory_img, carPos = np.array([70, 48])):
     closestPoint = np.array([trajectory_idx[0][closetPointIdx], trajectory_idx[1][closetPointIdx]])
     return closestPoint
 
-def maskTrajecories(image):
+def maskTrajectories(image):
 
     # Define the threshold ranges for each mask
     lower_yellow = np.array([100, 100, 0], dtype=np.uint8) ## Left of track in grass
@@ -124,17 +124,17 @@ def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
                 continue
 
             # if i % 200 == 0: # All 200 steps, we change velocity 
-            #     pid_velocity.setpoint = random.choice(velocitites)
+            #     pid_velocity.setpoint = random.choice(velocities)
 
             # ------ TRAJECTORY CONTROL ------ #
-            dict_masks = maskTrajecories(augmImg)
+            dict_masks = maskTrajectories(augmImg)
             track_img = dict_masks[MODE] # Get the correct mask for the desired agent
 
             # Get single line strip in front of car
             line_strip = track_img[strip_distance, :]
             idx = np.nonzero(line_strip)[0]
 
-            if len(idx) == 0: # Rarely happens, but sometimes at the thightest curve we lose intersection of strip with trajectory -> -1 angle
+            if len(idx) == 0: # Rarely happens, but sometimes at the tightest curve we lose intersection of strip with trajectory -> -1 angle
                 action[0] = -1.0
                 obs, _, done, info = env.step(action)
                 continue
