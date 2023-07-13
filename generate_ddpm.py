@@ -17,8 +17,6 @@ def fetch_hyperparams_from_yaml(file_path):
 
 
 # TODO: This code needs to be cleaned up.
-
-
 ############################
 #========== MAIN ===========
 ############################
@@ -50,9 +48,10 @@ def main():
     with open(filepath, 'rb') as f:
         stats = pickle.load(f)
 
-    pos_stats = stats[0]['position']
-    action_stats = stats[0]['action']
-    velocity_stats = stats[0]['velocity']
+    stats = stats[0]
+    pos_stats = stats['position']
+    action_stats = stats['action']
+    velocity_stats = stats['velocity']
 
     # ===========Parameters===========
     model_params = fetch_hyperparams_from_yaml(path_hyperparams)
@@ -63,11 +62,11 @@ def main():
     # =========== Dataloader ===========
     # Dataset dir and filename
     dataset_dir = './data'
-    dataset = CarRacingDataModule_forInference( batch_size, dataset_dir, obs_horizon, pred_horizon ,seed=52, stats=stats)
+    dataset = CarRacingDataModule( batch_size, dataset_dir, obs_horizon, pred_horizon ,seed=52, stats=stats)
     dataset.setup( name = dataset_name )
     test_dataloaders = dataset.val_dataloader()
 
-    # TODO: We only use a single batch, which begs the question on why using a dataloader in the first place.
+    # TODO: We only use a single batch, which begs the question on why using a full dataloader in the first place.
     # ---- get a batch of data ----
     batch = next(iter(test_dataloaders))
     x_0_predicted , _ , _ = model.sample(batch=batch[0], mode='validation')
