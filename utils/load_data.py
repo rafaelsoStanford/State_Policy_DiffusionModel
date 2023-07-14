@@ -283,7 +283,7 @@ class CarRacingDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=False, num_workers=4)
     
-    def save_min_max(self, path):
+    def save_stats(self, path):
         with open(path, 'wb') as f:
             pickle.dump([self.data_full.stats], f)
             

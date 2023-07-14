@@ -25,8 +25,8 @@ def main():
     # ? path_hyperparams = './tb_logs/version_588/hparams.yaml'
     # ? path_checkpoint = './tb_logs/version_588/checkpoints/epoch=55.ckpt'
     
-    path_hyperparams = './tb_logs/version_590/hparams.yaml'
-    path_checkpoint = './tb_logs/version_590/checkpoints/epoch=17.ckpt'
+    path_hyperparams = './tb_logs/version_606/hparams.yaml'
+    path_checkpoint = './tb_logs/version_606/checkpoints/epoch=29.ckpt'
     
     dataset_name = '2023-07-12-2225_dataset_1_episodes_3_modes.zarr.zip'
 
@@ -37,7 +37,7 @@ def main():
     model.eval() 
     
     # Specify the path to the pickle file
-    filepath = 'MinMax.pkl'
+    filepath = './tb_logs/STATS.pkl'
     # Load the pickle file
     with open(filepath, 'rb') as f:
         stats = pickle.load(f)
@@ -56,13 +56,13 @@ def main():
     # =========== Dataloader ===========
     # Dataset dir and filename
     dataset_dir = './data'
-    dataset = CarRacingDataModule(batch_size, dataset_dir, obs_horizon, pred_horizon, seed=52, stats=stats)
+    dataset = CarRacingDataModule(batch_size, dataset_dir, obs_horizon, pred_horizon, seed=20, stats=stats)
     dataset.setup(name=dataset_name)
     test_dataloader = dataset.val_dataloader()
 
     # ---- get a batch of data ----
     batch = next(iter(test_dataloader))
-    x_0_predicted, _, _ = model.sample(batch=batch[0], mode='validation')
+    x_0_predicted, _, _ = model.sample(batch=batch[0], mode='validation', denoising_steps=1000)
     translation_vector = batch[1].squeeze().cpu().detach().numpy()
     nPositions = batch[0]['position'].squeeze()
 
@@ -119,9 +119,9 @@ def main():
     # Scatter plot for 'Groundtruth'
     plt.scatter(positions_groundtruth[:, 0], positions_groundtruth[:, 1], c='b', label='Groundtruth', s = 10)
     # Scatter plot for 'Predicted by diffusion'
-    plt.scatter(positions_prediction[:, 0], positions_prediction[:, 1], c=colors, s = 10, label='Predicted by diffusion')
+    plt.scatter(positions_prediction[:, 0], positions_prediction[:, 1], c=colors, s = 20, label='Predicted by diffusion')
     # Add inpainted points
-    plt.scatter(inpainting_points[:, 0], inpainting_points[:, 1], c='o', label='Inpainted points', s = 10)
+    plt.scatter(inpainting_points[:, 0], inpainting_points[:, 1], c='r', label='Inpainted points', s = 10, marker='x')
     # Scatter plot for 'Predicted actions played out'
     plt.scatter(pos_history[:, 0], pos_history[:, 1], c=colors2, s = 10, label='Predicted actions played out')
     # Mark start position

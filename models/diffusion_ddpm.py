@@ -13,7 +13,7 @@ from models.encoder.autoencoder import *
 from utils.schedulers import *
 from utils.print_utils import *
 from utils.plot_utils import *
-from utils.data_utils import *
+
 
 
 class Diffusion_DDPM(pl.LightningModule):

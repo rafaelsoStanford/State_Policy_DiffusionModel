@@ -58,6 +58,7 @@ def main(args):
     # Dataset dir and filename
     dataset_dir = args.dataset_dir
     dataset_name = args.dataset
+    tb_dir = "tb_logs/"
 
     # model architecture
     model = args.model
@@ -70,7 +71,7 @@ def main(args):
     dataset.setup(name=dataset_name)
     train_dataloader = dataset.train_dataloader()
     valid_dataloader = dataset.val_dataloader()
-    dataset.save_min_max("./MinMax.pkl")
+    dataset.save_stats( tb_dir + "STATS.pkl")
 
     # # ===========model===========
     diffusion = Diffusion_DDPM(
@@ -87,7 +88,7 @@ def main(args):
     
     # ===========trainer===========
     # -----PL configs-----
-    tensorboard = pl_loggers.TensorBoardLogger(save_dir="tb_logs/",name='',flush_secs=1)
+    tensorboard = pl_loggers.TensorBoardLogger(save_dir=tb_dir ,name='',flush_secs=1)
 
     early_stop_callback = EarlyStopping(monitor='lr', stopping_threshold=2e-6, patience=n_epochs)   
     checkpoint_callback = ModelCheckpoint(filename="{epoch}",     # Checkpoint filename format
