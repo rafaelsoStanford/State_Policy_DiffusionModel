@@ -46,3 +46,5 @@ generateData/utils/__pycache__/
 MinMax.pkl
 utils/__pycache__/load_data.cpython-39.pyc
 
+.vscode/settings.json
+run.sh
