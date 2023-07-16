@@ -25,10 +25,10 @@ def main():
     # ? path_hyperparams = './tb_logs/version_588/hparams.yaml'
     # ? path_checkpoint = './tb_logs/version_588/checkpoints/epoch=55.ckpt'
     
-    path_hyperparams = './tb_logs/version_606/hparams.yaml'
-    path_checkpoint = './tb_logs/version_606/checkpoints/epoch=29.ckpt'
+    path_hyperparams = './tb_logs/version_607/hparams.yaml'
+    path_checkpoint = './tb_logs/version_607/checkpoints/epoch=26.ckpt'
     
-    dataset_name = '2023-07-12-2225_dataset_1_episodes_3_modes.zarr.zip'
+    dataset_name = '2023-07-15-1711_dataset_1_episodes_2_modes.zarr.zip'
 
     model = Diffusion_DDPM.load_from_checkpoint( #Choose between DDPM and DDIM -- Model is inherited from DDPM thus they are compatible
         path_checkpoint,

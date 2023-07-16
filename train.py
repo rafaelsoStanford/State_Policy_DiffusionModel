@@ -30,7 +30,7 @@ def parse_arguments():
     parser.add_argument('--noise_scheduler', type=str, default='linear', help='String for choosing noise scheduler')
 
     parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
-    parser.add_argument('--dataset', type=str, default='TestingActions_dataset_5_episodes_3_modes.zarr.zip', help='zarr.zip dataset filename')
+    parser.add_argument('--dataset', type=str, default='2023-07-14-1823_dataset_10_episodes_2_modes.zarr.zip', help='zarr.zip dataset filename')
     
     return parser.parse_args()
 
