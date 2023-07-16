@@ -19,7 +19,7 @@ def parse_arguments():
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
 
     parser.add_argument('--obs_horizon', type=int, default=20, help='Observation horizon')
-    parser.add_argument('--pred_horizon', type=int, default=20, help='Prediction horizon')
+    parser.add_argument('--pred_horizon', type=int, default=40, help='Prediction horizon')
     parser.add_argument('--action_horizon', type=int, default=1, help='Action horizon')
     parser.add_argument('--inpaint_horizon', type=int, default=10, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
     parser.add_argument('--noise_steps', type=int, default=1000, help='Denoising steps')

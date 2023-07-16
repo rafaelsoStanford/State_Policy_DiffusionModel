@@ -25,12 +25,15 @@ def main():
     # ? path_hyperparams = './tb_logs/version_588/hparams.yaml'
     # ? path_checkpoint = './tb_logs/version_588/checkpoints/epoch=55.ckpt'
     
-    path_hyperparams = './tb_logs/version_606/hparams.yaml'
-    path_checkpoint = './tb_logs/version_606/checkpoints/epoch=29.ckpt'
+
+
+    path_hyperparams = './tb_logs/version_590/hparams.yaml'
+    path_checkpoint = './tb_logs/version_590/checkpoints/epoch=17.ckpt'
+
     
     dataset_name = '2023-07-12-2225_dataset_1_episodes_3_modes.zarr.zip'
 
-    model = Diffusion_DDPM.load_from_checkpoint( #Choose between DDPM and DDIM -- Model is inherited from DDPM thus they are compatible
+    model = Diffusion_DDPM.load_from_checkpoint(
         path_checkpoint,
         hparams_file=path_hyperparams,
     )
@@ -71,10 +74,10 @@ def main():
     positions = output[:, :2]
     actions = output[:, 2:]
 
-    inpainting_points = unnormalize_data(2 * positions[:inpaint_horizon, ...] + translation_vector, stats=pos_stats)
-    positions_prediction = unnormalize_data(2 *  positions[inpaint_horizon:, ...]  + translation_vector, stats=pos_stats)
-    actions_prediction = unnormalize_data(2 * actions[inpaint_horizon:, ...], stats=action_stats)
-    positions_groundtruth = unnormalize_data(2 *nPositions  + translation_vector, stats=pos_stats)
+    inpainting_points = unnormalize_data( positions[:inpaint_horizon, ...] + translation_vector, stats=pos_stats) 
+    positions_prediction = unnormalize_data(positions[inpaint_horizon:, ...] + translation_vector, stats=pos_stats) 
+    actions_prediction = unnormalize_data(actions[inpaint_horizon:, ...], stats=action_stats)
+    positions_groundtruth = unnormalize_data(nPositions  + translation_vector, stats=pos_stats)
 
     vel0 = unnormalize_data(batch[0]['velocity'].squeeze()[obs_horizon, :], stats=velocity_stats)
     pos0 = positions_groundtruth[obs_horizon , ...]
