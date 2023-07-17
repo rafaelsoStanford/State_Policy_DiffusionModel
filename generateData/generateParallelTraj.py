@@ -105,7 +105,7 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
         #----- PID controllers ----- #
         pid_velocity = PID(0.005, 0.001, 0.0005, setpoint=VELOCITIES[0]) # PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(0, 1))
         pid_steering = PID(0.8, 0.01, 0.06, setpoint=0) # If negative switch over to breaking pedal
-        img_hist, vel_hist ,act_hist, pos_hist = [], [], [], []
+        img_hist, vel_hist ,act_hist, pos_hist, angle_hist, omega_hist, phase_hist = [], [], [], [], [], [], []
         action = np.array([0, 0, 0], dtype=np.float32)
         
         env = CarRacing()
@@ -119,6 +119,11 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
             augmImg = info['augmented_img'] # Augmented image with colored trajectories
             velB2vec = info['car_velocity_vector']
             posB2vec = info['car_position_vector']  
+            car_heading_angle = info['car_init_angle']
+
+
+
+            
 
             carVelocity_wFrame = [velB2vec.x , velB2vec.y]
             carPosition_wFrame = [posB2vec.x , posB2vec.y]
@@ -187,6 +192,15 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
             vel_hist.append(carVelocity_wFrame)
             pos_hist.append(carPosition_wFrame)
             act_hist.append(action.copy())
+            angle_hist.append(car_heading_angle)
+
+            for wheel in info['car_wheels']:
+                wheel_phase = wheel.phase
+                wheel_omega = wheel.omega
+
+                omega_hist.append(wheel_omega)
+                phase_hist.append(wheel_phase)
+
             
             # Take the action
             obs, _, done, info = env.step(action)
@@ -199,14 +213,40 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
         act_hist = np.array(act_hist, dtype=np.float32)
         vel_hist = np.array(vel_hist, dtype=np.float32)
         pos_hist = np.array(pos_hist, dtype=np.float32)
+        angle_hist = np.array(angle_hist, dtype=np.float32)
+        omega_hist = np.array(omega_hist, dtype=np.float32)
+        phase_hist = np.array(phase_hist, dtype=np.float32)
+
         # Normalize each image in img_hist to be between 0 and 1
         img_hist = img_hist / 255.0
+
+
+        omega1 =  omega_hist[0::4].copy()
+        phase1 =  phase_hist[0::4].copy()
+        omega2 =  omega_hist[1::4].copy()
+        phase2 =  phase_hist[1::4].copy()
+        omega3 =  omega_hist[2::4].copy()
+        phase3 =  phase_hist[2::4].copy()
+        omega4 =  omega_hist[3::4].copy()
+        phase4 =  phase_hist[3::4].copy()
 
         episode_data = {
                 "img": img_hist, 
                 "velocity": vel_hist, 
                 "position": pos_hist,
                 "action": act_hist, 
+                "angle": angle_hist,
+                
+                "omega1": omega1,
+                "phase1": phase1,
+                "omega2": omega2,
+                "phase2": phase2,
+                "omega3": omega3,
+                "phase3": phase3,
+                "omega4": omega4,
+                "phase4": phase4,
+                
+                
                 }
 
         buffer.add_episode(episode_data)

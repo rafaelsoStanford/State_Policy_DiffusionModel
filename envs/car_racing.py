@@ -476,7 +476,18 @@ class CarRacing(gym.Env, EzPickle):
         info = {'augmented_img': self.augmImageRender,
                 'car_position_vector': self.return_carPosition(),
                 'car_velocity_vector': self.car.hull.linearVelocity,
+                'car_init_angle': self.car.hull.angle,
+                'car_wheels_angular_velocity': self.car.wheels[0].angularVelocity,
+                'car_wheels': self.car.wheels
             }
+
+            #          w.wheel_rad = front_k * WHEEL_R * SIZE
+            # w.color = WHEEL_COLOR
+            # w.gas = 0.0
+            # w.brake = 0.0
+            # w.steer = 0.0
+            # w.phase = 0.0  # wheel angle
+            # w.omega = 0.0  # angular velocity   
 
 
         return self.state, step_reward, done, info

@@ -22,19 +22,11 @@ def main():
     batch_size = 1
 
     # =========== Load Model ===========
-<<<<<<< HEAD
     path_hyperparams = './tb_logs/version_619/hparams.yaml'
     path_checkpoint = './tb_logs/version_619/checkpoints/epoch=46.ckpt'
     filepath = './tb_logs/version_619/STATS.pkl'
-=======
-    # ? path_hyperparams = './tb_logs/version_588/hparams.yaml'
-    # ? path_checkpoint = './tb_logs/version_588/checkpoints/epoch=55.ckpt'
-    
-    path_hyperparams = './tb_logs/version_607/hparams.yaml'
-    path_checkpoint = './tb_logs/version_607/checkpoints/epoch=26.ckpt'
-    
->>>>>>> main
-    dataset_name = '2023-07-15-1711_dataset_1_episodes_2_modes.zarr.zip'
+    #dataset_name = '2023-07-15-1711_dataset_1_episodes_2_modes.zarr.zip'
+    dataset_name = '2023-07-16-2150_dataset_1_episodes_2_modes.zarr.zip'
 
     model = Diffusion_DDPM.load_from_checkpoint(
         path_checkpoint,
@@ -59,7 +51,7 @@ def main():
     # =========== Dataloader ===========
     # Dataset dir and filename
     dataset_dir = './data'
-    dataset = CarRacingDataModule(batch_size, dataset_dir, obs_horizon, pred_horizon, seed=2, stats=stats)
+    dataset = CarRacingDataModule(batch_size, dataset_dir, obs_horizon, pred_horizon, seed=95, stats=stats)
     dataset.setup(name=dataset_name)
     test_dataloader = dataset.val_dataloader()
 
@@ -87,12 +79,28 @@ def main():
     
     print("pos0: ", pos0)
     print("vel0: ", vel0)
+
+
+    omega = [
+            batch[0]['omega1'].squeeze()[obs_horizon].cpu().detach().numpy(),
+            batch[0]['omega2'].squeeze()[obs_horizon].cpu().detach().numpy(),
+            batch[0]['omega3'].squeeze()[obs_horizon].cpu().detach().numpy(), 
+            batch[0]['omega4'].squeeze()[obs_horizon].cpu().detach().numpy()  
+    ]
+    phase = [
+            batch[0]['phase1'].squeeze()[obs_horizon].cpu().detach().numpy(),
+            batch[0]['phase2'].squeeze()[obs_horizon].cpu().detach().numpy(),
+            batch[0]['phase3'].squeeze()[obs_horizon].cpu().detach().numpy(),
+            batch[0]['phase4'].squeeze()[obs_horizon].cpu().detach().numpy()
+            ]
+
+    initAngle = batch[0]['angle'].squeeze()[obs_horizon].cpu().detach().numpy()
     
     # ===========  GymWrapper  ===========
     env = EnvWrapper()
     env.seed(42)
     pos_history = []
-    env.reset_car(pos0[0], pos0[1], vel0[0], vel0[1])
+    env.reset_car(pos0[0], pos0[1], vel0[0], vel0[1], initAngle, omega, phase)
     position_from_saved_actions = []
     for i in range(positions_prediction.shape[0]):
         action = actions_groundtruth[i, :]
@@ -105,7 +113,7 @@ def main():
     env = EnvWrapper()
     env.seed(42)
     pos_history = []
-    env.reset_car(pos0[0], pos0[1], vel0[0], vel0[1])
+    env.reset_car(pos0[0], pos0[1], vel0[0], vel0[1], initAngle, omega, phase)
     for i in range(positions_prediction.shape[0]):
         action = actions_prediction[i, :]
         _,_,_,info = env.step(action) #env.step_noRender(actions[i, :])
@@ -121,23 +129,16 @@ def main():
 
     # ===========  Plotting  ===========
     fig = plt.figure()
-    fig.clf()
-
     # Scatter plot for 'Groundtruth'
-    plt.scatter(positions_groundtruth[:, 0], positions_groundtruth[:, 1], c='b', label='Groundtruth', s = 10)
-    # Scatter plot for 'Predicted by diffusion'
-    plt.scatter(positions_prediction[:, 0], positions_prediction[:, 1], c='y', s = 20, label='Predicted by diffusion')
-    
+    plt.scatter(positions_groundtruth[:, 0], positions_groundtruth[:, 1], c='b', label='Groundtruth', s = 20)
+    plt.scatter(positions_prediction[:, 0], positions_prediction[:, 1], c='y', s = 10, label='Predicted by diffusion')
     plt.scatter(position_from_saved_actions[:, 0], position_from_saved_actions[:, 1], c='g', s = 10, label='Saved actions played out')
-    # Add inpainted points
-    # plt.scatter(inpainting_points[:, 0], inpainting_points[:, 1], c='r', label='Inpainted points', s = 10, marker='x')
-    # Scatter plot for 'Predicted actions played out'
     plt.scatter(pos_history[:, 0], pos_history[:, 1], c='r', s = 10, label='Predicted actions played out')
-    # Mark start position
-    # Add legend
     plt.legend()
-    # Show the plot
     plt.show()
+
+    
+
 
 if __name__ == "__main__":
     main()
