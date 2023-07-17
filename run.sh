@@ -44,11 +44,11 @@ handle_interrupt() {
 
 
 # Execute the Python scripts with different configurations
-execute_script train.py --model="UNet_Film" --dataset="Sinusoidal_dataset_5_episodes.zarr.zip" \
+execute_script train.py --model="UNet_Film" --dataset="2023-07-16-2348_dataset_10_episodes_2_modes.zarr.zip" \
  --batch_size=16 --obs_horizon=10 --pred_horizon=10 --inpaint_horizon=10
 
-execute_script train.py --model="UNet_Film" --dataset="Sinusoidal_dataset_5_episodes.zarr.zip" \
+execute_script train.py --model="UNet_Film" --dataset="2023-07-16-2348_dataset_10_episodes_2_modes.zarr.zip" \
  --batch_size=16 --obs_horizon=10 --pred_horizon=20 --inpaint_horizon=10
 
-execute_script train.py --model="UNet_Film" --dataset="Sinusoidal_dataset_5_episodes.zarr.zip" \
+execute_script train.py --model="UNet_Film" --dataset="2023-07-16-2348_dataset_10_episodes_2_modes.zarr.zip" \
  --batch_size=16 --obs_horizon=20 --pred_horizon=40 --inpaint_horizon=10
