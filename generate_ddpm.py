@@ -105,11 +105,7 @@ def main():
     for i in range(actions_gt.shape[0]):
         action = actions_gt[i, :]
         _,_,_,info = env.step(action) 
-
-
         position_from_saved_actions.append( info['car_position_vector'].copy())
-
-
         env.render()
     position_from_saved_actions = np.array(position_from_saved_actions)
     env.close()
@@ -194,10 +190,7 @@ def main():
     axs[0][2].grid(True)
     axs[1][2].grid(True)
     axs[2][2].grid(True)
-
     plt.show()
-
-    
 
 
 if __name__ == "__main__":
