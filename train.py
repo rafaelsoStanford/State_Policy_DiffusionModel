@@ -19,7 +19,7 @@ def parse_arguments():
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
 
     parser.add_argument('--obs_horizon', type=int, default=20, help='Observation horizon')
-    parser.add_argument('--pred_horizon', type=int, default=20, help='Prediction horizon')
+    parser.add_argument('--pred_horizon', type=int, default=40, help='Prediction horizon')
     parser.add_argument('--action_horizon', type=int, default=1, help='Action horizon')
     parser.add_argument('--inpaint_horizon', type=int, default=10, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
     parser.add_argument('--noise_steps', type=int, default=1000, help='Denoising steps')
@@ -71,7 +71,7 @@ def main(args):
     dataset.setup(name=dataset_name)
     train_dataloader = dataset.train_dataloader()
     valid_dataloader = dataset.val_dataloader()
-    dataset.save_stats( tb_dir + "STATS.pkl")
+   
 
     # # ===========model===========
     diffusion = Diffusion_DDPM(
@@ -89,24 +89,33 @@ def main(args):
     # ===========trainer===========
     # -----PL configs-----
     tensorboard = pl_loggers.TensorBoardLogger(save_dir=tb_dir ,name='',flush_secs=1)
-
+    
+    
+    
     early_stop_callback = EarlyStopping(monitor='lr', stopping_threshold=2e-6, patience=n_epochs)   
     checkpoint_callback = ModelCheckpoint(filename="{epoch}",     # Checkpoint filename format
                                           save_top_k=-1,          # Save all checkpoints
                                           every_n_epochs=1,               # Save every epoch
                                           save_on_train_epoch_end=True,
                                           verbose=True)
+
+    
     # -----train model-----
     trainer = pl.Trainer(accelerator='gpu', devices=[0,1], precision=("16-mixed" if AMP else 32), max_epochs=n_epochs, 
                          callbacks=[early_stop_callback, checkpoint_callback],
                          logger=tensorboard, profiler="simple", val_check_interval=0.25, 
-                         accumulate_grad_batches=1, gradient_clip_val=0.5) #, strategy='ddp_find_unused_parameters_true') 
+                         accumulate_grad_batches=1, gradient_clip_val=0.5) 
 
     # -----print model info------
     if os.getenv("LOCAL_RANK", '0') == '0':
         print_dataset_info(args,dataset_dir, dataset_name, train_dataloader, tensorboard)
 
+    # -----save stats------
     trainer.validate(model= diffusion, dataloaders=valid_dataloader)
+    tb_new_dir = tensorboard.log_dir  #.validate() had to be called before, otherwise tb_new_dir is not yet created
+    dataset.save_stats( tb_new_dir + "/STATS.pkl")
+    
+    # -----train model-----
     trainer.fit(model=diffusion, train_dataloaders=train_dataloader, val_dataloaders=valid_dataloader)
 
 if __name__ == "__main__":

@@ -48,3 +48,5 @@ utils/__pycache__/load_data.cpython-39.pyc
 
 .vscode/settings.json
 run.sh
+utils/__pycache__/
+envs/__pycache__/

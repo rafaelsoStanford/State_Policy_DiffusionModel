@@ -186,7 +186,6 @@ class Diffusion_DDPM(pl.LightningModule):
                     x_t =  self.p_reverseProcess(obs_cond,  x_t,  t)
                     x_t = self.add_constraints(x_t, x_0)
                     sampling_history.append(x_t.squeeze().detach().cpu().numpy())
-                    
             return sampling_history , x_0
 
     # q(x_t | x_0)
@@ -206,9 +205,7 @@ class Diffusion_DDPM(pl.LightningModule):
         
         for t in reversed(range(0,self.noise_steps)): # t ranges from 999 to 0
             x_t =  self.p_reverseProcess(x_cond,  x_t,  t)
-
             x_t = self.add_constraints(x_t, x_0)
-
         return x_t
 
     @torch.no_grad()

@@ -27,20 +27,18 @@ class EnvWrapper(CarRacing):
 
         return info
     
-    def reset_car(self, x, y, xdot, ydot):
+    def reset_car(self, x, y, xdot, ydot, initAngle, omega, phase):
         state = super().reset()
         
 
-        init_angle = np.arctan2(ydot, xdot) - np.pi / 2
+        init_angle =  initAngle #np.arctan2(ydot, xdot) - np.pi / 2
         self.car = Car(self.world, init_angle=float(init_angle), init_x= float(x), init_y=float(y))
         self.car.hull.linearVelocity = Box2D.b2Vec2(float(xdot),float(ydot))
-        v = float(np.sqrt(xdot**2 + ydot**2))
         
-        for w in self.car.wheels:
-            w.angularVelocity = v
-            w.omega = v / (w.wheel_rad)
+        for idx, w in enumerate(self.car.wheels):
+            w.omega = omega[idx]
+            w.phase = phase[idx]
 
-        return self.step(None)[0]
         
     def close(self):
         super().close()
