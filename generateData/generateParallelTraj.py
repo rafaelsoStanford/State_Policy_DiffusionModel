@@ -76,7 +76,7 @@ def switch_mode(modes):
 def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
     # ======================  INITIALIZATION  ====================== #
     # Random seed for each episode -- track during episode is different
-    seeds = np.random.randint(43, 500, size=NUM_EPISODES) # [42] #
+    seeds =  [42] # np.random.randint(43, 500, size=NUM_EPISODES) # [42] #
     # Init environment and buffer
     
     
@@ -139,8 +139,22 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
             idx = np.nonzero(line_strip)[0]
 
             if len(idx) == 0: # Rarely happens, but sometimes at the tightest curve we lose intersection of strip with trajectory -- in that case just continue with previous steering angle
-                action = np.array([action[0], 0, 0], dtype=np.float32)
+                #action = np.array([action[0], 0, 0], dtype=np.float32)
                 obs, _, done, info = env.step(action)
+
+                                # Save the observation and action            
+                img_hist.append(obs)
+                vel_hist.append(carVelocity_wFrame)
+                pos_hist.append(carPosition_wFrame)
+                act_hist.append(action.copy())
+                angle_hist.append(car_heading_angle)
+
+                for wheel in info['car_wheels']:
+                    wheel_phase = wheel.phase
+                    wheel_omega = wheel.omega
+
+                    omega_hist.append(wheel_omega)
+                    phase_hist.append(wheel_phase)
                 continue
 
             # Get index closest to middle of strip (idx = 48)

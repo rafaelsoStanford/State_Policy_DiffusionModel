@@ -17,16 +17,14 @@ def fetch_hyperparams_from_yaml(file_path):
 
 def main():
     # Some params, dont know where to put them
-    AMP = True
-    n_epochs = 1
     batch_size = 1
 
     # =========== Load Model ===========
-    path_hyperparams = './tb_logs/version_619/hparams.yaml'
-    path_checkpoint = './tb_logs/version_619/checkpoints/epoch=46.ckpt'
-    filepath = './tb_logs/version_619/STATS.pkl'
+    path_hyperparams = './tb_logs/version_624/hparams.yaml'
+    path_checkpoint = './tb_logs/version_624/checkpoints/epoch=35.ckpt'
+    filepath = './tb_logs/version_624/STATS.pkl'
     #dataset_name = '2023-07-15-1711_dataset_1_episodes_2_modes.zarr.zip'
-    dataset_name = '2023-07-16-2150_dataset_1_episodes_2_modes.zarr.zip'
+    dataset_name = '2023-07-17-1123_dataset_1_episodes_2_modes.zarr.zip'
 
     model = Diffusion_DDPM.load_from_checkpoint(
         path_checkpoint,
@@ -52,7 +50,7 @@ def main():
     # =========== Dataloader ===========
     # Dataset dir and filename
     dataset_dir = './data'
-    dataset = CarRacingDataModule(batch_size, dataset_dir, obs_horizon, pred_horizon, seed=95, stats=stats)
+    dataset = CarRacingDataModule(batch_size, dataset_dir, obs_horizon, pred_horizon, seed=156, stats=stats)
     dataset.setup(name=dataset_name)
     test_dataloader = dataset.val_dataloader()
 
@@ -70,9 +68,9 @@ def main():
     
 
     # inpainting_points = unnormalize_data( nPositions + translation_vector, stats=pos_stats) 
-    positions_prediction = unnormalize_data( nPositionPred + translation_vector, stats=pos_stats) 
+    positions_prediction = unnormalize_data( 2* nPositionPred + translation_vector, stats=pos_stats) 
     actions_prediction = unnormalize_data( nActionPred , stats=action_stats)
-    positions_groundtruth = unnormalize_data( nPositions  + translation_vector, stats=pos_stats)
+    positions_groundtruth = unnormalize_data( 2* nPositions  + translation_vector, stats=pos_stats)
     actions_groundtruth = unnormalize_data( nActions, stats=action_stats)
 
     vel0 = unnormalize_data( nVelocity[inpaint_horizon-1, ...], stats=velocity_stats)
@@ -80,7 +78,6 @@ def main():
     
     print("pos0: ", pos0)
     print("vel0: ", vel0)
-
 
     omega = [
             batch[0]['omega1'].squeeze()[obs_horizon].cpu().detach().numpy(),
@@ -108,6 +105,7 @@ def main():
     for i in range(actions_gt.shape[0]):
         action = actions_gt[i, :]
         _,_,_,info = env.step(action) 
+
 
         position_from_saved_actions.append( info['car_position_vector'].copy())
 
@@ -142,49 +140,51 @@ def main():
     plt.legend()
     plt.show()
 
-        # ? ====== Plotting ====== #
     fig, axs = plt.subplots(3, 3)
-    
     axs[0][0].plot(nActionPred[:,0], label='Predicted normalized')
     axs[0][0].plot(nActions[inpaint_horizon:,0], label='Groundtruth normalized')
-    axs[0][0].legend()
+    legend1 = axs[0][0].legend(fontsize='small', loc='upper left')
 
     axs[1][0].plot(actions_prediction[:,0], label='Predicted unnormalized')
     axs[1][0].plot(actions_groundtruth[inpaint_horizon:,0], label='Groundtruth unnormalized')
-    axs[1][0].legend()
+    legend2 = axs[1][0].legend(fontsize='small', loc='upper left')
 
     axs[0][1].plot(nActionPred[:,1], label='Predicted normalized')
     axs[0][1].plot(nActions[inpaint_horizon:,1], label='Groundtruth normalized')
-    axs[0][1].legend()
+    legend3 = axs[0][1].legend(fontsize='small', loc='upper left')
 
     axs[1][1].plot(actions_prediction[:,1], label='Predicted unnormalized')
     axs[1][1].plot(actions_groundtruth[inpaint_horizon:,1], label='Groundtruth unnormalized')
-    axs[1][1].legend()
+    legend4 = axs[1][1].legend(fontsize='small', loc='upper left')
     
     axs[0][2].plot(nActionPred[:,2], label='Predicted normalized')
     axs[0][2].plot(nActions[inpaint_horizon:,2], label='Groundtruth normalized')
-    axs[0][2].legend()
+    legend5 = axs[0][2].legend(fontsize='small', loc='upper left')
 
     axs[1][2].plot(actions_prediction[:,2], label='Predicted unnormalized')
     axs[1][2].plot(actions_groundtruth[inpaint_horizon:,2], label='Groundtruth unnormalized')
-    axs[1][2].legend()
-    
-    # axs[2][0].plot(action[:,0])
+    legend6 = axs[1][2].legend(fontsize='small', loc='upper left')
 
-    # axs[0][1].plot(action_buffer[:,1])
-    # axs[1][1].plot(normalized_action_data[:,1])
-    # axs[2][1].plot(unnormalized_action_data[:,1])
+    axs[0][0].set_title('Steering', pad=30)
+    axs[0][1].set_title('Accerleration / Gas', pad=30)
+    axs[0][2].set_title('Beaking', pad=30)
 
-    # axs[0][2].plot(action_buffer[:,2])
-    # axs[1][2].plot(normalized_action_data[:,2])
-    # axs[2][2].plot(unnormalized_action_data[:,2])
+    # Modify the size and position of the legends
+    legend1.get_frame().set_alpha(0.8)  # Adjust the legend background transparency
+    legend1.set_bbox_to_anchor((0.5, 1.15))  # Adjust the legend position relative to the plot
+    legend2.get_frame().set_alpha(0.8)
+    legend2.set_bbox_to_anchor((0.5, 1.15))
+    legend3.get_frame().set_alpha(0.8)
+    legend3.set_bbox_to_anchor((0.5, 1.15))
+    legend4.get_frame().set_alpha(0.8)
+    legend4.set_bbox_to_anchor((0.5, 1.15))
+    legend5.get_frame().set_alpha(0.8)
+    legend5.set_bbox_to_anchor((0.5, 1.15))
+    legend6.get_frame().set_alpha(0.8)
+    legend6.set_bbox_to_anchor((0.5, 1.15))
 
-    # t = np.arange(200, 300, 1)
-    # axs[0][0].plot(t, isolated_actions[:,0])
-    # axs[0][1].plot(t, isolated_actions[:,1])
-    # axs[0][2].plot(t, isolated_actions[:,2])
-
-
+    # Adjust the spacing between subplots
+    plt.subplots_adjust(wspace=0.3, hspace=0.3)
     axs[0][0].grid(True)
     axs[1][0].grid(True)
     axs[2][0].grid(True)
@@ -194,7 +194,6 @@ def main():
     axs[0][2].grid(True)
     axs[1][2].grid(True)
     axs[2][2].grid(True)
-
 
     plt.show()
 
