@@ -106,7 +106,7 @@ def main():
         action = actions_gt[i, :]
         _,_,_,info = env.step(action) 
         position_from_saved_actions.append( info['car_position_vector'].copy())
-        env.render()
+        # env.render()
     position_from_saved_actions = np.array(position_from_saved_actions)
     env.close()
 
@@ -120,7 +120,7 @@ def main():
 
         pos_history.append( info['car_position_vector'].copy())
 
-        env.render()
+        # env.render()
         print( "Action: ", action , "Velocity: ", info['car_velocity_vector'], "Position: ", info['car_position_vector'] )
 
     pos_history = np.array(pos_history)

@@ -78,8 +78,7 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
     # Random seed for each episode -- track during episode is different
     seeds =  [42] # np.random.randint(43, 500, size=NUM_EPISODES) # [42] #
     # Init environment and buffer
-    
-    
+
     # -----  Run parameters ----- #
     strip_distance = 60 # x - coordinates of the strip
     car_pos_vector = np.array([70, 48])
@@ -120,16 +119,10 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
             posB2vec = info['car_position_vector']  
             car_heading_angle = info['car_init_angle']
 
-
-
-            
-
             carVelocity_wFrame = [velB2vec.x , velB2vec.y]
             carPosition_wFrame = [posB2vec.x , posB2vec.y]
             v_wFrame = np.linalg.norm(velB2vec)
             
-
-
             # ------ TRAJECTORY CONTROL ------ #
             dict_masks = maskTrajectories(augmImg)
             track_img = dict_masks[MODE] # Get the correct mask for the desired agent
@@ -142,7 +135,7 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
                 #action = np.array([action[0], 0, 0], dtype=np.float32)
                 obs, _, done, info = env.step(action)
 
-                                # Save the observation and action            
+                # Save the observation and action            
                 img_hist.append(obs)
                 vel_hist.append(carVelocity_wFrame)
                 pos_hist.append(carPosition_wFrame)
@@ -189,14 +182,13 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
 
             if error_vel_avg < 0:
                 action[1] = 0
-                action[2] = np.clip( np.linalg.norm( pid_velocity(np.linalg.norm(v_wFrame)) ) , 0 , 0.9) 
+                action[2] = np.linalg.norm( pid_velocity(np.linalg.norm(v_wFrame) ) )
             else:
                 action[1] = pid_velocity(np.linalg.norm(v_wFrame))
                 action[2] = 0
 
             # ------ Step the environment ------ #
             obs, _ , done, info = env.step(action)
-            
             # Save the observation and action            
             img_hist.append(obs)
             vel_hist.append(carVelocity_wFrame)
@@ -207,7 +199,6 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
             for wheel in info['car_wheels']:
                 wheel_phase = wheel.phase
                 wheel_omega = wheel.omega
-
                 omega_hist.append(wheel_omega)
                 phase_hist.append(wheel_phase)
 
@@ -225,39 +216,19 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
         # Normalize each image in img_hist to be between 0 and 1
         img_hist = img_hist / 255.0
 
-
-        omega1 =  omega_hist[0::4].copy()
-        phase1 =  phase_hist[0::4].copy()
-        omega2 =  omega_hist[1::4].copy()
-        phase2 =  phase_hist[1::4].copy()
-        omega3 =  omega_hist[2::4].copy()
-        phase3 =  phase_hist[2::4].copy()
-        omega4 =  omega_hist[3::4].copy()
-        phase4 =  phase_hist[3::4].copy()
-
-        episode_data = {
-                "img": img_hist, 
-                "velocity": vel_hist, 
-                "position": pos_hist,
-                "action": act_hist, 
-                "angle": angle_hist,
-                
-                "omega1": omega1,
-                "phase1": phase1,
-                "omega2": omega2,
-                "phase2": phase2,
-                "omega3": omega3,
-                "phase3": phase3,
-                "omega4": omega4,
-                "phase4": phase4,
-                
-                
-                }
+        episode_data =  {
+                        "img": img_hist, 
+                        "velocity": vel_hist, 
+                        "position": pos_hist,
+                        "action": act_hist, 
+                        "angle": angle_hist,
+                        }
 
         buffer.add_episode(episode_data)
         print("Episode finished after {} timesteps".format(len(img_hist)))
     env.close()
     return img_hist, vel_hist ,act_hist, pos_hist
+
 
 def generateData(args):
     # ======================  PARAMETERS  ====================== #
@@ -267,14 +238,12 @@ def generateData(args):
     base_dir = args.base_dir
     modes = args.modes #['middle', 'left', 'right'] #['lleft', 'left', 'middle', 'right', 'rright']
     velocities = args.velocities #[0, 10, 20]
-
-
     buffer = ReplayBuffer.create_empty_numpy()
 
     # ======================  GENERATE DATA  ====================== #
     for mode in modes:
         print("Mode: ", mode)
-        img_hist, vel_hist ,act_hist, track_hist = driving(buffer, NUM_EPISODES_PER_MODE, mode, velocities)
+        driving(buffer, NUM_EPISODES_PER_MODE, mode, velocities)
 
     # ======================  SAVE DATA  ====================== #
     today = datetime.now()    # Get today's date
@@ -314,11 +283,10 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_name", type=str, default=None, help="Dataset name")
     parser.add_argument("--base_dir", type=str, default="./data/", help="Base directory")
     parser.add_argument("--modes", nargs="+", default=["left" , "right"], help="Modes list")
-    parser.add_argument("--velocities", nargs="+", default=[  30 ], help="Velocities list")
+    parser.add_argument("--velocities", nargs="+", default=[ 30 ], help="Velocities list")
     parser.add_argument("--render_mode", type=str, default="human", help="render mode of gym env. human means render, rgb_array means no render visible")
 
     args = parser.parse_args()
-
     render_mode = args.render_mode
 
     print()
