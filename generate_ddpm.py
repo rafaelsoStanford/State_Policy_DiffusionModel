@@ -22,25 +22,17 @@ def main():
     batch_size = 1
 
     # =========== Load Model ===========
-    # ? path_hyperparams = './tb_logs/version_588/hparams.yaml'
-    # ? path_checkpoint = './tb_logs/version_588/checkpoints/epoch=55.ckpt'
-    
-
-
-    path_hyperparams = './tb_logs/version_590/hparams.yaml'
-    path_checkpoint = './tb_logs/version_590/checkpoints/epoch=17.ckpt'
-
-    
-    dataset_name = '2023-07-12-2225_dataset_1_episodes_3_modes.zarr.zip'
+    path_hyperparams = './tb_logs/version_619/hparams.yaml'
+    path_checkpoint = './tb_logs/version_619/checkpoints/epoch=46.ckpt'
+    filepath = './tb_logs/version_619/STATS.pkl'
+    dataset_name = '2023-07-15-1711_dataset_1_episodes_2_modes.zarr.zip'
 
     model = Diffusion_DDPM.load_from_checkpoint(
         path_checkpoint,
         hparams_file=path_hyperparams,
     )
     model.eval() 
-    
-    # Specify the path to the pickle file
-    filepath = './tb_logs/STATS.pkl'
+
     # Load the pickle file
     with open(filepath, 'rb') as f:
         stats = pickle.load(f)
@@ -54,32 +46,34 @@ def main():
     model_params = fetch_hyperparams_from_yaml(path_hyperparams)
     obs_horizon = model_params['obs_horizon']
     pred_horizon = model_params['pred_horizon']
-    inpaint_horizon = model_params['inpaint_horizon']
 
     # =========== Dataloader ===========
     # Dataset dir and filename
     dataset_dir = './data'
-    dataset = CarRacingDataModule(batch_size, dataset_dir, obs_horizon, pred_horizon, seed=20, stats=stats)
+    dataset = CarRacingDataModule(batch_size, dataset_dir, obs_horizon, pred_horizon, seed=2, stats=stats)
     dataset.setup(name=dataset_name)
     test_dataloader = dataset.val_dataloader()
 
     # ---- get a batch of data ----
     batch = next(iter(test_dataloader))
-    x_0_predicted, _, _ = model.sample(batch=batch[0], mode='validation', denoising_steps=1000)
+    x_0_predicted, _, _ = model.sample(batch=batch[0], mode='validation')
+    
     translation_vector = batch[1].squeeze().cpu().detach().numpy()
-    nPositions = batch[0]['position'].squeeze()
+   
+    nPositions = batch[0]['position'].squeeze().cpu().detach().numpy()
+    nActions = batch[0]['action'].squeeze().cpu().detach().numpy()
+    nVelocity = batch[0]['velocity'].squeeze().cpu().detach().numpy()
+    nPositionPred = x_0_predicted.squeeze()[:, :2].cpu().detach().numpy()
+    nActionPred = x_0_predicted.squeeze()[:, 2:].cpu().detach().numpy()
+    
 
-    # ---- separate position / action ----
-    output = x_0_predicted.squeeze().cpu().detach().numpy()
-    positions = output[:, :2]
-    actions = output[:, 2:]
+    # inpainting_points = unnormalize_data( nPositions + translation_vector, stats=pos_stats) 
+    positions_prediction = unnormalize_data( nPositionPred + translation_vector, stats=pos_stats) 
+    actions_prediction = unnormalize_data( nActionPred , stats=action_stats)
+    positions_groundtruth = unnormalize_data( nPositions  + translation_vector, stats=pos_stats)
+    actions_groundtruth = unnormalize_data( nActions, stats=action_stats)
 
-    inpainting_points = unnormalize_data( positions[:inpaint_horizon, ...] + translation_vector, stats=pos_stats) 
-    positions_prediction = unnormalize_data(positions[inpaint_horizon:, ...] + translation_vector, stats=pos_stats) 
-    actions_prediction = unnormalize_data(actions[inpaint_horizon:, ...], stats=action_stats)
-    positions_groundtruth = unnormalize_data(nPositions  + translation_vector, stats=pos_stats)
-
-    vel0 = unnormalize_data(batch[0]['velocity'].squeeze()[obs_horizon, :], stats=velocity_stats)
+    vel0 = unnormalize_data( nVelocity[obs_horizon, :], stats=velocity_stats)
     pos0 = positions_groundtruth[obs_horizon , ...]
     
     print("pos0: ", pos0)
@@ -90,43 +84,46 @@ def main():
     env.seed(42)
     pos_history = []
     env.reset_car(pos0[0], pos0[1], vel0[0], vel0[1])
+    position_from_saved_actions = []
+    for i in range(positions_prediction.shape[0]):
+        action = actions_groundtruth[i, :]
+        _,_,_,info = env.step(action) #env.step_noRender(actions[i, :])
+        position_from_saved_actions.append( info['car_position_vector'].copy())
+        env.render()
+    position_from_saved_actions = np.array(position_from_saved_actions)
+    env.close()
+
+    env = EnvWrapper()
+    env.seed(42)
+    pos_history = []
+    env.reset_car(pos0[0], pos0[1], vel0[0], vel0[1])
     for i in range(positions_prediction.shape[0]):
         action = actions_prediction[i, :]
-        action[0] = np.clip(action[0], -1, 1)
-        action[1] = np.clip(action[1], 0, 1)
-        action[2] = np.clip(action[2], 0, 1)
-        _,_,_,info = env.step(actions[i, :]) #env.step_noRender(actions[i, :])
+        _,_,_,info = env.step(action) #env.step_noRender(actions[i, :])
         pos_history.append( info['car_position_vector'].copy())
         env.render()
-        print(info['car_velocity_vector'])
-        print("Linear Velocity: ", np.linalg.norm(info['car_velocity_vector']))
-        print(action)
-        # input("Press Enter to continue...")
+        # print(info['car_velocity_vector'])
+        # print("Linear Velocity: ", np.linalg.norm(info['car_velocity_vector']))
+        # print(action)
+        print( "Action: ", action , "Velocity: ", info['car_velocity_vector'], "Position: ", info['car_position_vector'] )
+
     pos_history = np.array(pos_history)
     env.close()
 
     # ===========  Plotting  ===========
     fig = plt.figure()
     fig.clf()
-    # Create a colormap for fading colors based on the number of timesteps
-    cmap = get_cmap('viridis', pred_horizon )
-    cmap2 = get_cmap('Reds', pred_horizon )
-    
-    # Create an array of indices from 0 to timesteps-1
-    indices = np.arange(pred_horizon )
-    # Normalize the indices to the range [0, 1]
-    normalized_indices = indices / (pred_horizon  - 1)
-    # Create a color array using the colormap and normalized indices
-    colors = cmap(normalized_indices)
-    colors2 = cmap2(np.flip(normalized_indices))
+
     # Scatter plot for 'Groundtruth'
     plt.scatter(positions_groundtruth[:, 0], positions_groundtruth[:, 1], c='b', label='Groundtruth', s = 10)
     # Scatter plot for 'Predicted by diffusion'
-    plt.scatter(positions_prediction[:, 0], positions_prediction[:, 1], c=colors, s = 20, label='Predicted by diffusion')
+    plt.scatter(positions_prediction[:, 0], positions_prediction[:, 1], c='y', s = 20, label='Predicted by diffusion')
+    
+    plt.scatter(position_from_saved_actions[:, 0], position_from_saved_actions[:, 1], c='g', s = 10, label='Saved actions played out')
     # Add inpainted points
-    plt.scatter(inpainting_points[:, 0], inpainting_points[:, 1], c='r', label='Inpainted points', s = 10, marker='x')
+    # plt.scatter(inpainting_points[:, 0], inpainting_points[:, 1], c='r', label='Inpainted points', s = 10, marker='x')
     # Scatter plot for 'Predicted actions played out'
-    plt.scatter(pos_history[:, 0], pos_history[:, 1], c=colors2, s = 10, label='Predicted actions played out')
+    plt.scatter(pos_history[:, 0], pos_history[:, 1], c='r', s = 10, label='Predicted actions played out')
     # Mark start position
     # Add legend
     plt.legend()
