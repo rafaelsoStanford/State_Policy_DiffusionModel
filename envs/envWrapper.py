@@ -39,8 +39,6 @@ class EnvWrapper(CarRacing):
             w.omega = omega[idx]
             w.phase = phase[idx]
 
-
-        return self.step(None)[0]
         
     def close(self):
         super().close()

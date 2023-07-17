@@ -47,6 +47,7 @@ def main():
     model_params = fetch_hyperparams_from_yaml(path_hyperparams)
     obs_horizon = model_params['obs_horizon']
     pred_horizon = model_params['pred_horizon']
+    inpaint_horizon = model_params['inpaint_horizon']
 
     # =========== Dataloader ===========
     # Dataset dir and filename
@@ -74,8 +75,8 @@ def main():
     positions_groundtruth = unnormalize_data( nPositions  + translation_vector, stats=pos_stats)
     actions_groundtruth = unnormalize_data( nActions, stats=action_stats)
 
-    vel0 = unnormalize_data( nVelocity[obs_horizon, :], stats=velocity_stats)
-    pos0 = positions_groundtruth[obs_horizon , ...]
+    vel0 = unnormalize_data( nVelocity[inpaint_horizon-1, ...], stats=velocity_stats)
+    pos0 = positions_groundtruth[inpaint_horizon-1 , ...]
     
     print("pos0: ", pos0)
     print("vel0: ", vel0)
@@ -102,9 +103,11 @@ def main():
     pos_history = []
     env.reset_car(pos0[0], pos0[1], vel0[0], vel0[1], initAngle, omega, phase)
     position_from_saved_actions = []
-    for i in range(positions_prediction.shape[0]):
-        action = actions_groundtruth[i, :]
-        _,_,_,info = env.step(action) #env.step_noRender(actions[i, :])
+
+    actions_gt = actions_groundtruth[inpaint_horizon:, ...].copy()
+    for i in range(actions_gt.shape[0]):
+        action = actions_gt[i, :]
+        _,_,_,info = env.step(action) 
         position_from_saved_actions.append( info['car_position_vector'].copy())
         env.render()
     position_from_saved_actions = np.array(position_from_saved_actions)
@@ -119,9 +122,6 @@ def main():
         _,_,_,info = env.step(action) #env.step_noRender(actions[i, :])
         pos_history.append( info['car_position_vector'].copy())
         env.render()
-        # print(info['car_velocity_vector'])
-        # print("Linear Velocity: ", np.linalg.norm(info['car_velocity_vector']))
-        # print(action)
         print( "Action: ", action , "Velocity: ", info['car_velocity_vector'], "Position: ", info['car_position_vector'] )
 
     pos_history = np.array(pos_history)
@@ -129,12 +129,68 @@ def main():
 
     # ===========  Plotting  ===========
     fig = plt.figure()
-    # Scatter plot for 'Groundtruth'
-    plt.scatter(positions_groundtruth[:, 0], positions_groundtruth[:, 1], c='b', label='Groundtruth', s = 20)
+    plt.scatter(pos0[0], pos0[1], c='k', label='Initial position', s = 50)
+    plt.plot(positions_groundtruth[:, 0], positions_groundtruth[:, 1], c='b', label='Groundtruth')
     plt.scatter(positions_prediction[:, 0], positions_prediction[:, 1], c='y', s = 10, label='Predicted by diffusion')
     plt.scatter(position_from_saved_actions[:, 0], position_from_saved_actions[:, 1], c='g', s = 10, label='Saved actions played out')
     plt.scatter(pos_history[:, 0], pos_history[:, 1], c='r', s = 10, label='Predicted actions played out')
     plt.legend()
+    plt.show()
+
+        # ? ====== Plotting ====== #
+    fig, axs = plt.subplots(3, 3)
+    
+    axs[0][0].plot(nActionPred[:,0], label='Predicted normalized')
+    axs[0][0].plot(nActions[inpaint_horizon:,0], label='Groundtruth normalized')
+    axs[0][0].legend()
+
+    axs[1][0].plot(actions_prediction[:,0], label='Predicted unnormalized')
+    axs[1][0].plot(actions_groundtruth[inpaint_horizon:,0], label='Groundtruth unnormalized')
+    axs[1][0].legend()
+
+    axs[0][1].plot(nActionPred[:,1], label='Predicted normalized')
+    axs[0][1].plot(nActions[inpaint_horizon:,1], label='Groundtruth normalized')
+    axs[0][1].legend()
+
+    axs[1][1].plot(actions_prediction[:,1], label='Predicted unnormalized')
+    axs[1][1].plot(actions_groundtruth[inpaint_horizon:,1], label='Groundtruth unnormalized')
+    axs[1][1].legend()
+    
+    axs[0][2].plot(nActionPred[:,2], label='Predicted normalized')
+    axs[0][2].plot(nActions[inpaint_horizon:,2], label='Groundtruth normalized')
+    axs[0][2].legend()
+
+    axs[1][2].plot(actions_prediction[:,2], label='Predicted unnormalized')
+    axs[1][2].plot(actions_groundtruth[inpaint_horizon:,2], label='Groundtruth unnormalized')
+    axs[1][2].legend()
+    
+    # axs[2][0].plot(action[:,0])
+
+    # axs[0][1].plot(action_buffer[:,1])
+    # axs[1][1].plot(normalized_action_data[:,1])
+    # axs[2][1].plot(unnormalized_action_data[:,1])
+
+    # axs[0][2].plot(action_buffer[:,2])
+    # axs[1][2].plot(normalized_action_data[:,2])
+    # axs[2][2].plot(unnormalized_action_data[:,2])
+
+    # t = np.arange(200, 300, 1)
+    # axs[0][0].plot(t, isolated_actions[:,0])
+    # axs[0][1].plot(t, isolated_actions[:,1])
+    # axs[0][2].plot(t, isolated_actions[:,2])
+
+
+    axs[0][0].grid(True)
+    axs[1][0].grid(True)
+    axs[2][0].grid(True)
+    axs[0][1].grid(True)
+    axs[1][1].grid(True)
+    axs[2][1].grid(True)
+    axs[0][2].grid(True)
+    axs[1][2].grid(True)
+    axs[2][2].grid(True)
+
+
     plt.show()
 
     
