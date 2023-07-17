@@ -73,37 +73,42 @@ def switch_mode(modes):
     chosen_mode = random.choice(modes)
     return chosen_mode
 
-def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
+def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
     # ======================  INITIALIZATION  ====================== #
     # Random seed for each episode -- track during episode is different
-    seeds = np.random.randint(0, 200, size=NUM_EPISODES) # [42] #
+    seeds = [42] # np.random.randint(0, 200, size=NUM_EPISODES) # 
+    # Init environment and buffer
     
-    # ----- Error buffers ----- #
-    error_hist = []
-    error_avg_hist = []
-    error_velocity_buffer = deque(np.zeros(7), maxlen = 7)
-    error_buffer = deque(np.zeros(10), maxlen = 10) # Buffer for storing errors for PID controller
-    error_buffer_2 = deque(np.zeros(3), maxlen = 3) # Buffer for storing errors for PID controller
-
-    #----- PID controllers ----- #
-    pid_velocity = PID(0.005, 0.001, 0.0005, setpoint=VELOCITIES[0]) # PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(0, 1))
-    pid_steering = PID(0.8, 0.01, 0.06, setpoint=0) # If negative switch over to breaking pedal
-
+    
     # -----  Run parameters ----- #
     strip_distance = 60 # x - coordinates of the strip
     car_pos_vector = np.array([70, 48])
     max_steps = 1000 # Max steps per episode
     wait_steps = 50 # Wait steps before starting to collect data
     total_steps = max_steps + wait_steps
-    velocitites = VELOCITIES
     
     # ======================  START RUN  ====================== #
     print("*"*10 +" Starting run...: Current Mode: ", MODE, "*"*10)
     for episode in range(NUM_EPISODES):
         # -----  Initialize Run  ----- #
         #Initialize list for storing data -- will be sent to zarr replay buffer
+        # ----- Error buffers ----- #
+        
+        error_hist = []
+        error_avg_hist = []
+        error_velocity_buffer = deque(np.zeros(7), maxlen = 7)
+        error_buffer = deque(np.zeros(10), maxlen = 10) # Buffer for storing errors for PID controller
+        error_buffer_2 = deque(np.zeros(3), maxlen = 3) # Buffer for storing errors for PID controller
+
+
+        
+        #----- PID controllers ----- #
+        pid_velocity = PID(0.005, 0.001, 0.0005, setpoint=VELOCITIES[0]) # PID(0.01, 0, 0.05, setpoint=0.0, output_limits=(0, 1))
+        pid_steering = PID(0.8, 0.01, 0.06, setpoint=0) # If negative switch over to breaking pedal
         img_hist, vel_hist ,act_hist, pos_hist = [], [], [], []
         action = np.array([0, 0, 0], dtype=np.float32)
+        
+        env = CarRacing()
         env.seed(int(seeds[episode]))
         env.reset()
         obs, _ , done, info = env.step(action) # Take a step to get the environment started (action is empty)
@@ -187,6 +192,7 @@ def driving(env, buffer, NUM_EPISODES, MODE, VELOCITIES):
             obs, _, done, info = env.step(action)
             if done or isopen == False:
                 break
+        env.close()
         
         # ======================  SAVE DATA  ====================== #
         img_hist = np.array(img_hist, dtype=np.float32)
@@ -217,14 +223,13 @@ def generateData(args):
     modes = args.modes #['middle', 'left', 'right'] #['lleft', 'left', 'middle', 'right', 'rright']
     velocities = args.velocities #[0, 10, 20]
 
-    # Init environment and buffer
-    env = CarRacing()
+
     buffer = ReplayBuffer.create_empty_numpy()
 
     # ======================  GENERATE DATA  ====================== #
     for mode in modes:
         print("Mode: ", mode)
-        img_hist, vel_hist ,act_hist, track_hist = driving(env, buffer, NUM_EPISODES_PER_MODE, mode, velocities)
+        img_hist, vel_hist ,act_hist, track_hist = driving(buffer, NUM_EPISODES_PER_MODE, mode, velocities)
 
     # ======================  SAVE DATA  ====================== #
     today = datetime.now()    # Get today's date
@@ -263,7 +268,7 @@ if __name__ == "__main__":
     parser.add_argument("--chunk_len", type=int, default=-1, help="Chunk length")
     parser.add_argument("--dataset_name", type=str, default=None, help="Dataset name")
     parser.add_argument("--base_dir", type=str, default="./data/", help="Base directory")
-    parser.add_argument("--modes", nargs="+", default=["middle", "left" , "right"], help="Modes list")
+    parser.add_argument("--modes", nargs="+", default=["left" , "right"], help="Modes list")
     parser.add_argument("--velocities", nargs="+", default=[  20 ], help="Velocities list")
     parser.add_argument("--render_mode", type=str, default="human", help="render mode of gym env. human means render, rgb_array means no render visible")
 

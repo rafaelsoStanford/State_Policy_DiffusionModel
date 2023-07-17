@@ -22,9 +22,18 @@ def main():
     batch_size = 1
 
     # =========== Load Model ===========
+<<<<<<< HEAD
     path_hyperparams = './tb_logs/version_619/hparams.yaml'
     path_checkpoint = './tb_logs/version_619/checkpoints/epoch=46.ckpt'
     filepath = './tb_logs/version_619/STATS.pkl'
+=======
+    # ? path_hyperparams = './tb_logs/version_588/hparams.yaml'
+    # ? path_checkpoint = './tb_logs/version_588/checkpoints/epoch=55.ckpt'
+    
+    path_hyperparams = './tb_logs/version_607/hparams.yaml'
+    path_checkpoint = './tb_logs/version_607/checkpoints/epoch=26.ckpt'
+    
+>>>>>>> main
     dataset_name = '2023-07-15-1711_dataset_1_episodes_2_modes.zarr.zip'
 
     model = Diffusion_DDPM.load_from_checkpoint(

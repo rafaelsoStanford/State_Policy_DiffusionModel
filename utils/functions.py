@@ -281,10 +281,12 @@ def trajectory_control(augmImg,
 
     # ------  VELOCITY CONTROL  ------ #
     error_vel = pid_velocity.setpoint - np.linalg.norm(v_wFrame)
+    if np.linalg.norm(error_vel) < 2.0:
+        error_vel = 0.0 * error_vel # Attenuate errors close to target velocity -- otherwise we get oscillations 
     error_velocity_buffer.append(error_vel)
     error_vel_avg = sum(error_velocity_buffer) / len(error_velocity_buffer)
 
-    if error_vel_avg < -0.0:
+    if error_vel_avg < 0:
         action[1] = 0
         action[2] = np.clip(np.linalg.norm(pid_velocity(np.linalg.norm(v_wFrame))), 0, 0.9)
     else:
