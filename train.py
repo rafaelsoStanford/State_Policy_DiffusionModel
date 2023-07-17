@@ -30,7 +30,7 @@ def parse_arguments():
     parser.add_argument('--noise_scheduler', type=str, default='linear', help='String for choosing noise scheduler')
 
     parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
-    parser.add_argument('--dataset', type=str, default='TestingActions_dataset_5_episodes_3_modes.zarr.zip', help='zarr.zip dataset filename')
+    parser.add_argument('--dataset', type=str, default='2023-07-14-1823_dataset_10_episodes_2_modes.zarr.zip', help='zarr.zip dataset filename')
     
     return parser.parse_args()
 
@@ -71,7 +71,7 @@ def main(args):
     dataset.setup(name=dataset_name)
     train_dataloader = dataset.train_dataloader()
     valid_dataloader = dataset.val_dataloader()
-    dataset.save_stats( tb_dir + "STATS.pkl")
+   
 
     # # ===========model===========
     diffusion = Diffusion_DDPM(
@@ -89,24 +89,33 @@ def main(args):
     # ===========trainer===========
     # -----PL configs-----
     tensorboard = pl_loggers.TensorBoardLogger(save_dir=tb_dir ,name='',flush_secs=1)
-
+    
+    
+    
     early_stop_callback = EarlyStopping(monitor='lr', stopping_threshold=2e-6, patience=n_epochs)   
     checkpoint_callback = ModelCheckpoint(filename="{epoch}",     # Checkpoint filename format
                                           save_top_k=-1,          # Save all checkpoints
                                           every_n_epochs=1,               # Save every epoch
                                           save_on_train_epoch_end=True,
                                           verbose=True)
+
+    
     # -----train model-----
     trainer = pl.Trainer(accelerator='gpu', devices=[0,1], precision=("16-mixed" if AMP else 32), max_epochs=n_epochs, 
                          callbacks=[early_stop_callback, checkpoint_callback],
                          logger=tensorboard, profiler="simple", val_check_interval=0.25, 
-                         accumulate_grad_batches=1, gradient_clip_val=0.5) #, strategy='ddp_find_unused_parameters_true') 
+                         accumulate_grad_batches=1, gradient_clip_val=0.5) 
 
     # -----print model info------
     if os.getenv("LOCAL_RANK", '0') == '0':
         print_dataset_info(args,dataset_dir, dataset_name, train_dataloader, tensorboard)
 
+    # -----save stats------
     trainer.validate(model= diffusion, dataloaders=valid_dataloader)
+    tb_new_dir = tensorboard.log_dir  #.validate() had to be called before, otherwise tb_new_dir is not yet created
+    dataset.save_stats( tb_new_dir + "/STATS.pkl")
+    
+    # -----train model-----
     trainer.fit(model=diffusion, train_dataloaders=train_dataloader, val_dataloaders=valid_dataloader)
 
 if __name__ == "__main__":
