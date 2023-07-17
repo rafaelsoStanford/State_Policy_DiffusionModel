@@ -76,16 +76,15 @@ def switch_mode(modes):
 def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
     # ======================  INITIALIZATION  ====================== #
     # Random seed for each episode -- track during episode is different
-    seeds = [42] # np.random.randint(0, 200, size=NUM_EPISODES) # 
+    seeds = np.random.randint(43, 500, size=NUM_EPISODES) # [42] #
     # Init environment and buffer
     
     
     # -----  Run parameters ----- #
     strip_distance = 60 # x - coordinates of the strip
     car_pos_vector = np.array([70, 48])
-    max_steps = 1000 # Max steps per episode
-    wait_steps = 50 # Wait steps before starting to collect data
-    total_steps = max_steps + wait_steps
+    max_steps = 2000 # Max steps per episode
+    total_steps = max_steps 
     
     # ======================  START RUN  ====================== #
     print("*"*10 +" Starting run...: Current Mode: ", MODE, "*"*10)
@@ -129,12 +128,7 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
             carPosition_wFrame = [posB2vec.x , posB2vec.y]
             v_wFrame = np.linalg.norm(velB2vec)
             
-            if i < wait_steps: # First x steps, we do nothing (avoid zooming animation)
-                env.step(action)
-                continue
 
-            # if i % 200 == 0: # All 200 steps, we change velocity 
-            #     pid_velocity.setpoint = random.choice(velocities)
 
             # ------ TRAJECTORY CONTROL ------ #
             dict_masks = maskTrajectories(augmImg)
@@ -144,8 +138,8 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
             line_strip = track_img[strip_distance, :]
             idx = np.nonzero(line_strip)[0]
 
-            if len(idx) == 0: # Rarely happens, but sometimes at the tightest curve we lose intersection of strip with trajectory -> -1 angle
-                action[0] = -1.0
+            if len(idx) == 0: # Rarely happens, but sometimes at the tightest curve we lose intersection of strip with trajectory -- in that case just continue with previous steering angle
+                action = np.array([action[0], 0, 0], dtype=np.float32)
                 obs, _, done, info = env.step(action)
                 continue
 
@@ -157,7 +151,7 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
             # ------  PID CONTROL  ------ #
             err =  idx - 48.0 # Correcting for the fact that negative value is a left turn, ie positive angle
             err = np.clip(err, -5, 5) # Clip the error to avoid large changes of steering angle going to infinity
-            if np.linalg.norm(err) <= 2: # Attenuate errors close to target trajectory -- otherwise we get oscillations
+            if np.linalg.norm(err) <= 1: # Attenuate errors close to target trajectory -- otherwise we get oscillations
                 err = 0.3 * err
             # Buffer for error data -- used for smoothing the error signal -- Simple averaging filter over 10 steps and then 3 steps
             error_buffer.append(err)
@@ -174,10 +168,12 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
 
             # ------  VELOCITY CONTROL  ------ #
             error_vel = pid_velocity.setpoint - np.linalg.norm(v_wFrame)
+            if np.linalg.norm(error_vel) < 2.0:
+                error_vel = 0.0 * error_vel # Attenuate errors close to target velocity -- otherwise we get oscillations 
             error_velocity_buffer.append(error_vel)
             error_vel_avg = sum(error_velocity_buffer) / len(error_velocity_buffer)
-            
-            if error_vel_avg < -0.0:
+
+            if error_vel_avg < 0:
                 action[1] = 0
                 action[2] = np.clip( np.linalg.norm( pid_velocity(np.linalg.norm(v_wFrame)) ) , 0 , 0.9) 
             else:
@@ -201,11 +197,6 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
                 omega_hist.append(wheel_omega)
                 phase_hist.append(wheel_phase)
 
-            
-            # Take the action
-            obs, _, done, info = env.step(action)
-            if done or isopen == False:
-                break
         env.close()
         
         # ======================  SAVE DATA  ====================== #
@@ -309,7 +300,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_name", type=str, default=None, help="Dataset name")
     parser.add_argument("--base_dir", type=str, default="./data/", help="Base directory")
     parser.add_argument("--modes", nargs="+", default=["left" , "right"], help="Modes list")
-    parser.add_argument("--velocities", nargs="+", default=[  20 ], help="Velocities list")
+    parser.add_argument("--velocities", nargs="+", default=[  30 ], help="Velocities list")
     parser.add_argument("--render_mode", type=str, default="human", help="render mode of gym env. human means render, rgb_array means no render visible")
 
     args = parser.parse_args()

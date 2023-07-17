@@ -108,7 +108,10 @@ def main():
     for i in range(actions_gt.shape[0]):
         action = actions_gt[i, :]
         _,_,_,info = env.step(action) 
+
         position_from_saved_actions.append( info['car_position_vector'].copy())
+
+
         env.render()
     position_from_saved_actions = np.array(position_from_saved_actions)
     env.close()
@@ -120,7 +123,9 @@ def main():
     for i in range(positions_prediction.shape[0]):
         action = actions_prediction[i, :]
         _,_,_,info = env.step(action) #env.step_noRender(actions[i, :])
+
         pos_history.append( info['car_position_vector'].copy())
+
         env.render()
         print( "Action: ", action , "Velocity: ", info['car_velocity_vector'], "Position: ", info['car_position_vector'] )
 
