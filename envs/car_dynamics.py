@@ -135,6 +135,43 @@ class Car:
         self.drawlist = self.wheels + [self.hull]
         self.particles = []
 
+    def _save_state(self):
+        self._saved_state = {
+            "hull": {
+                "position": self.hull.position.copy(),
+                "angle": self.hull.angle,
+                "linearVelocity": self.hull.linearVelocity,
+                "angularVelocity": self.hull.angularVelocity,
+            },
+            "wheels": [
+                {
+                    "wheel_rad": w.wheel_rad,
+                    "gas": w.gas,
+                    "brake": w.brake,
+                    "steer": w.steer,
+                    "phase": w.phase,
+                    "omega": w.omega,
+                }
+                for w in self.wheels
+            ],
+        }
+
+        return self._saved_state
+    
+    def _restore_state(self, saved_state):
+        self.hull.position = saved_state["hull"]["position"]
+        self.hull.angle = saved_state["hull"]["angle"]
+        self.hull.linearVelocity = saved_state["hull"]["linearVelocity"]
+        self.hull.angularVelocity = saved_state["hull"]["angularVelocity"]
+
+        for w, saved_w in zip(self.wheels, saved_state["wheels"]):
+            w.wheel_rad = saved_w["wheel_rad"]
+            w.gas = saved_w["gas"]
+            w.brake = saved_w["brake"]
+            w.steer = saved_w["steer"]
+            w.phase = saved_w["phase"]
+            w.omega = saved_w["omega"]
+
     def gas(self, gas):
         """control: rear wheel drive
 
