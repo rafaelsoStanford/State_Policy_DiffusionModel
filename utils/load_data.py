@@ -145,17 +145,6 @@ class CarRacingDataset(torch.utils.data.Dataset):
             'velocity': dataset_root['data']['velocity'][:],
             'action': dataset_root['data']['action'][:],
             'angle': dataset_root['data']['angle'][:],
-
-            'omega1': dataset_root['data']['omega1'][:],
-            'omega2': dataset_root['data']['omega2'][:],
-            'omega3': dataset_root['data']['omega3'][:],
-            'omega4': dataset_root['data']['omega4'][:],
-
-            'phase1': dataset_root['data']['phase1'][:],
-            'phase2': dataset_root['data']['phase2'][:],
-            'phase3': dataset_root['data']['phase3'][:],
-            'phase4': dataset_root['data']['phase4'][:],
-
         }
         episode_ends = dataset_root['meta']['episode_ends'][:]
 
@@ -246,17 +235,7 @@ class CarRacingDataset_forInference(CarRacingDataset):
             self.train_data['velocity'] = normalized_velocity_data
             self.train_data['action'] = normalized_action_data
             self.train_data['image'] = train_image_data
-
             self.train_data['angle'] = train_data['angle']
-
-            self.train_data['omega1'] = train_data['omega1']
-            self.train_data['omega2'] = train_data['omega2']
-            self.train_data['omega3'] = train_data['omega3']
-            self.train_data['omega4'] = train_data['omega4']
-            self.train_data['phase1'] = train_data['phase1']
-            self.train_data['phase2'] = train_data['phase2']
-            self.train_data['phase3'] = train_data['phase3']
-            self.train_data['phase4'] = train_data['phase4']
 
     def _normalize_sample(self, nsample):
         sample_normalized = normalize_data(nsample['position'], self.stats['position'])

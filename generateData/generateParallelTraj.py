@@ -135,6 +135,16 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
                 #action = np.array([action[0], 0, 0], dtype=np.float32)
                 obs, _, done, info = env.step(action)
 
+                augmImg = info['augmented_img'] # Augmented image with colored trajectories
+                velB2vec = info['car_velocity_vector']
+                posB2vec = info['car_position_vector']  
+                car_heading_angle = info['car_init_angle']
+
+                carVelocity_wFrame = [velB2vec.x , velB2vec.y]
+                carPosition_wFrame = [posB2vec.x , posB2vec.y]
+                v_wFrame = np.linalg.norm(velB2vec)
+                
+
                 # Save the observation and action            
                 img_hist.append(obs)
                 vel_hist.append(carVelocity_wFrame)

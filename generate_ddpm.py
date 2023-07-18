@@ -24,7 +24,7 @@ def main():
     path_checkpoint = './tb_logs/version_624/checkpoints/epoch=35.ckpt'
     filepath = './tb_logs/version_624/STATS.pkl'
     #dataset_name = '2023-07-15-1711_dataset_1_episodes_2_modes.zarr.zip'
-    dataset_name = '2023-07-17-1123_dataset_1_episodes_2_modes.zarr.zip'
+    dataset_name = '2023-07-17-2252_dataset_1_episodes_2_modes.zarr.zip'
 
     model = Diffusion_DDPM.load_from_checkpoint(
         path_checkpoint,
@@ -79,18 +79,6 @@ def main():
     print("pos0: ", pos0)
     print("vel0: ", vel0)
 
-    omega = [
-            batch[0]['omega1'].squeeze()[obs_horizon].cpu().detach().numpy(),
-            batch[0]['omega2'].squeeze()[obs_horizon].cpu().detach().numpy(),
-            batch[0]['omega3'].squeeze()[obs_horizon].cpu().detach().numpy(), 
-            batch[0]['omega4'].squeeze()[obs_horizon].cpu().detach().numpy()  
-    ]
-    phase = [
-            batch[0]['phase1'].squeeze()[obs_horizon].cpu().detach().numpy(),
-            batch[0]['phase2'].squeeze()[obs_horizon].cpu().detach().numpy(),
-            batch[0]['phase3'].squeeze()[obs_horizon].cpu().detach().numpy(),
-            batch[0]['phase4'].squeeze()[obs_horizon].cpu().detach().numpy()
-            ]
 
     initAngle = batch[0]['angle'].squeeze()[obs_horizon].cpu().detach().numpy()
     
@@ -98,7 +86,7 @@ def main():
     env = EnvWrapper()
     env.seed(42)
     pos_history = []
-    env.reset_car(pos0[0], pos0[1], vel0[0], vel0[1], initAngle, omega, phase)
+    env.reset_car(pos0[0], pos0[1], vel0[0], vel0[1], initAngle)
     position_from_saved_actions = []
 
     actions_gt = actions_groundtruth[inpaint_horizon:, ...].copy()
@@ -113,7 +101,7 @@ def main():
     env = EnvWrapper()
     env.seed(42)
     pos_history = []
-    env.reset_car(pos0[0], pos0[1], vel0[0], vel0[1], initAngle, omega, phase)
+    env.reset_car(pos0[0], pos0[1], vel0[0], vel0[1], initAngle)
     for i in range(positions_prediction.shape[0]):
         action = actions_prediction[i, :]
         _,_,_,info = env.step(action) #env.step_noRender(actions[i, :])
