@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import yaml
 import pickle
 
-
 from models.diffusion_ddpm import *
 from models.diffusion_ddim import *
 from utils.load_data import *
@@ -114,7 +113,11 @@ def main():
     pos_history = np.array(pos_history)
     env.close()
 
-    # ===========  Plotting  ===========
+
+    # ==================================#
+    # ===========  Plotting  ===========#
+    # ==================================#
+
     fig = plt.figure()
     plt.scatter(pos0[0], pos0[1], c='k', label='Initial position', s = 50)
     plt.plot(positions_groundtruth[:, 0], positions_groundtruth[:, 1], c='b', label='Groundtruth')

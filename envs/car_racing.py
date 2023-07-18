@@ -184,6 +184,12 @@ class CarRacing(gym.Env, EzPickle):
         for t in self.road:
             self.world.DestroyBody(t)
         self.road = []
+                            # Delete all points in lists
+        self.t1 = []
+        self.t2 = []
+        self.t3 = []
+        self.t4 = []
+        self.t5 = []
         self.car.destroy()
 
     def _create_track(self):
@@ -414,12 +420,7 @@ class CarRacing(gym.Env, EzPickle):
         return self.car.hull.position
 
     def reset(self):
-                    # Delete all points in lists
-        self.t1.clear()
-        self.t2.clear()
-        self.t3.clear()
-        self.t4.clear()
-        self.t5.clear()
+
         
         self._destroy()
         self.reward = 0.0
@@ -440,10 +441,6 @@ class CarRacing(gym.Env, EzPickle):
         self.car = Car(self.world, *self.track[0][1:4])
 
         return self.step(None)[0]
-
-
-    def augmentedRender(self, mode="state_pixels"):
-        pass
 
     def step(self, action):
         if action is not None:
@@ -480,15 +477,6 @@ class CarRacing(gym.Env, EzPickle):
                 'car_wheels_angular_velocity': self.car.wheels[0].angularVelocity,
                 'car_wheels': self.car.wheels
             }
-
-            #          w.wheel_rad = front_k * WHEEL_R * SIZE
-            # w.color = WHEEL_COLOR
-            # w.gas = 0.0
-            # w.brake = 0.0
-            # w.steer = 0.0
-            # w.phase = 0.0  # wheel angle
-            # w.omega = 0.0  # angular velocity   
-
 
         return self.state, step_reward, done, info
     
