@@ -474,8 +474,8 @@ class CarRacing(gym.Env, EzPickle):
                 'car_position_vector': self.return_carPosition(),
                 'car_velocity_vector': self.car.hull.linearVelocity,
                 'car_init_angle': self.car.hull.angle,
-                'car_wheels_angular_velocity': self.car.wheels[0].angularVelocity,
-                'car_wheels': self.car.wheels
+                # 'car_wheels_angular_velocity': self.car.wheels[0].angularVelocity,
+                # 'car_wheels': self.car.wheels
             }
 
         return self.state, step_reward, done, info
