@@ -23,7 +23,7 @@ def main():
     path_checkpoint = './tb_logs/version_624/checkpoints/epoch=35.ckpt'
     filepath = './tb_logs/version_624/STATS.pkl'
     #dataset_name = '2023-07-15-1711_dataset_1_episodes_2_modes.zarr.zip'
-    dataset_name = '2023-07-17-2252_dataset_1_episodes_2_modes.zarr.zip'
+    dataset_name = '2023-07-18-0031_dataset_1_episodes_2_modes.zarr.zip'
 
     model = Diffusion_DDPM.load_from_checkpoint(
         path_checkpoint,
@@ -49,7 +49,7 @@ def main():
     # =========== Dataloader ===========
     # Dataset dir and filename
     dataset_dir = './data'
-    dataset = CarRacingDataModule(batch_size, dataset_dir, obs_horizon, pred_horizon, seed=156, stats=stats)
+    dataset = CarRacingDataModule(batch_size, dataset_dir, obs_horizon, pred_horizon, seed=125, stats=stats)
     dataset.setup(name=dataset_name)
     test_dataloader = dataset.val_dataloader()
 
@@ -93,7 +93,7 @@ def main():
         action = actions_gt[i, :]
         _,_,_,info = env.step(action) 
         position_from_saved_actions.append( info['car_position_vector'].copy())
-        # env.render()
+        env.render()
     position_from_saved_actions = np.array(position_from_saved_actions)
     env.close()
 
@@ -107,7 +107,7 @@ def main():
 
         pos_history.append( info['car_position_vector'].copy())
 
-        # env.render()
+        env.render()
         print( "Action: ", action , "Velocity: ", info['car_velocity_vector'], "Position: ", info['car_position_vector'] )
 
     pos_history = np.array(pos_history)
@@ -118,69 +118,76 @@ def main():
     # ===========  Plotting  ===========#
     # ==================================#
 
+
+
     fig = plt.figure()
     plt.scatter(pos0[0], pos0[1], c='k', label='Initial position', s = 50)
     plt.plot(positions_groundtruth[:, 0], positions_groundtruth[:, 1], c='b', label='Groundtruth')
-    plt.scatter(positions_prediction[:, 0], positions_prediction[:, 1], c='y', s = 10, label='Predicted by diffusion')
+    plt.plot(positions_prediction[:, 0], positions_prediction[:, 1], c='purple', label='Predicted by diffusion')
+    plt.scatter(positions_prediction[:, 0], positions_prediction[:, 1], c='r', marker='x' ,s = 10, label='Predicted by diffusion')
     plt.scatter(position_from_saved_actions[:, 0], position_from_saved_actions[:, 1], c='g', s = 10, label='Saved actions played out')
     plt.scatter(pos_history[:, 0], pos_history[:, 1], c='r', s = 10, label='Predicted actions played out')
+    plt.title('Overview Position-generation by environment')
     plt.legend()
     plt.show()
 
-    fig, axs = plt.subplots(3, 3)
-    axs[0][0].plot(nActionPred[:,0], label='Predicted normalized')
-    axs[0][0].plot(nActions[inpaint_horizon:,0], label='Groundtruth normalized')
-    legend1 = axs[0][0].legend(fontsize='small', loc='upper left')
+    fig, axs = plt.subplots(1, 3)
 
-    axs[1][0].plot(actions_prediction[:,0], label='Predicted unnormalized')
-    axs[1][0].plot(actions_groundtruth[inpaint_horizon:,0], label='Groundtruth unnormalized')
-    legend2 = axs[1][0].legend(fontsize='small', loc='upper left')
+    fig.suptitle('Actions Groundtruth vs Predicted')
 
-    axs[0][1].plot(nActionPred[:,1], label='Predicted normalized')
-    axs[0][1].plot(nActions[inpaint_horizon:,1], label='Groundtruth normalized')
-    legend3 = axs[0][1].legend(fontsize='small', loc='upper left')
+    # axs[0][0].plot(nActionPred[:,0], label='Predicted normalized')
+    # axs[0][0].plot(nActions[inpaint_horizon:,0], label='Groundtruth normalized')
+    # legend1 = axs[0][0].legend(fontsize='small', loc='upper left')
 
-    axs[1][1].plot(actions_prediction[:,1], label='Predicted unnormalized')
-    axs[1][1].plot(actions_groundtruth[inpaint_horizon:,1], label='Groundtruth unnormalized')
-    legend4 = axs[1][1].legend(fontsize='small', loc='upper left')
+    # axs[0][1].plot(nActionPred[:,1], label='Predicted normalized')
+    # axs[0][1].plot(nActions[inpaint_horizon:,1], label='Groundtruth normalized')
+    # legend3 = axs[0][1].legend(fontsize='small', loc='upper left')
+
+    # axs[0][2].plot(nActionPred[:,2], label='Predicted normalized')
+    # axs[0][2].plot(nActions[inpaint_horizon:,2], label='Groundtruth normalized')
+    # legend5 = axs[0][2].legend(fontsize='small', loc='upper left')
+
+    axs[0].plot(actions_prediction[:,0], label='Predicted unnormalized')
+    axs[0].plot(actions_groundtruth[inpaint_horizon:,0], label='Groundtruth unnormalized')
+    legend2 = axs[0].legend(fontsize='small', loc='upper left')
+
+    axs[1].plot(actions_prediction[:,1], label='Predicted unnormalized')
+    axs[1].plot(actions_groundtruth[inpaint_horizon:,1], label='Groundtruth unnormalized')
+    legend4 = axs[1].legend(fontsize='small', loc='upper left')
     
-    axs[0][2].plot(nActionPred[:,2], label='Predicted normalized')
-    axs[0][2].plot(nActions[inpaint_horizon:,2], label='Groundtruth normalized')
-    legend5 = axs[0][2].legend(fontsize='small', loc='upper left')
+    axs[2].plot(actions_prediction[:,2], label='Predicted unnormalized')
+    axs[2].plot(actions_groundtruth[inpaint_horizon:,2], label='Groundtruth unnormalized')
+    legend6 = axs[2].legend(fontsize='small', loc='upper left')
 
-    axs[1][2].plot(actions_prediction[:,2], label='Predicted unnormalized')
-    axs[1][2].plot(actions_groundtruth[inpaint_horizon:,2], label='Groundtruth unnormalized')
-    legend6 = axs[1][2].legend(fontsize='small', loc='upper left')
-
-    axs[0][0].set_title('Steering', pad=30)
-    axs[0][1].set_title('Accerleration / Gas', pad=30)
-    axs[0][2].set_title('Beaking', pad=30)
+    axs[0].set_title('Steering', pad=30)
+    axs[1].set_title('Accerleration / Gas', pad=30)
+    axs[2].set_title('Beaking', pad=30)
 
     # Modify the size and position of the legends
-    legend1.get_frame().set_alpha(0.8)  # Adjust the legend background transparency
-    legend1.set_bbox_to_anchor((0.5, 1.15))  # Adjust the legend position relative to the plot
+    # legend1.get_frame().set_alpha(0.8)  # Adjust the legend background transparency
+    # legend1.set_bbox_to_anchor((0.5, 1.15))  # Adjust the legend position relative to the plot
     legend2.get_frame().set_alpha(0.8)
-    legend2.set_bbox_to_anchor((0.5, 1.15))
-    legend3.get_frame().set_alpha(0.8)
-    legend3.set_bbox_to_anchor((0.5, 1.15))
+    legend2.set_bbox_to_anchor((-0.2, 0.5))
+    # legend3.get_frame().set_alpha(0.8)
+    # legend3.set_bbox_to_anchor((0.5, 1.15))
     legend4.get_frame().set_alpha(0.8)
-    legend4.set_bbox_to_anchor((0.5, 1.15))
-    legend5.get_frame().set_alpha(0.8)
-    legend5.set_bbox_to_anchor((0.5, 1.15))
+    legend4.set_bbox_to_anchor((-0.2,  0.5))
+    # legend5.get_frame().set_alpha(0.8)
+    # legend5.set_bbox_to_anchor((0.5, 1.15))
     legend6.get_frame().set_alpha(0.8)
-    legend6.set_bbox_to_anchor((0.5, 1.15))
+    legend6.set_bbox_to_anchor((-0.2,  0.5))
 
     # Adjust the spacing between subplots
     plt.subplots_adjust(wspace=0.3, hspace=0.3)
-    axs[0][0].grid(True)
-    axs[1][0].grid(True)
-    axs[2][0].grid(True)
-    axs[0][1].grid(True)
-    axs[1][1].grid(True)
-    axs[2][1].grid(True)
-    axs[0][2].grid(True)
-    axs[1][2].grid(True)
-    axs[2][2].grid(True)
+    axs[0].grid(True)
+    # axs[1][0].grid(True)
+    # axs[2][0].grid(True)
+    axs[1].grid(True)
+    # axs[1][1].grid(True)
+    # axs[2][1].grid(True)
+    axs[2].grid(True)
+    # axs[1][2].grid(True)
+    # axs[2][2].grid(True)
     plt.show()
 
 

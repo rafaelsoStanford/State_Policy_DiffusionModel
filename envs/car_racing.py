@@ -184,12 +184,7 @@ class CarRacing(gym.Env, EzPickle):
         for t in self.road:
             self.world.DestroyBody(t)
         self.road = []
-                            # Delete all points in lists
-        self.t1 = []
-        self.t2 = []
-        self.t3 = []
-        self.t4 = []
-        self.t5 = []
+
         self.car.destroy()
 
     def _create_track(self):
@@ -420,7 +415,12 @@ class CarRacing(gym.Env, EzPickle):
         return self.car.hull.position
 
     def reset(self):
-
+        # Delete all points in lists
+        self.t1 = []
+        self.t2 = []
+        self.t3 = []
+        self.t4 = []
+        self.t5 = []
         
         self._destroy()
         self.reward = 0.0
@@ -474,8 +474,6 @@ class CarRacing(gym.Env, EzPickle):
                 'car_position_vector': self.return_carPosition(),
                 'car_velocity_vector': self.car.hull.linearVelocity,
                 'car_init_angle': self.car.hull.angle,
-                # 'car_wheels_angular_velocity': self.car.wheels[0].angularVelocity,
-                # 'car_wheels': self.car.wheels
             }
 
         return self.state, step_reward, done, info
