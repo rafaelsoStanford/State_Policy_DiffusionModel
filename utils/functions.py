@@ -1,11 +1,8 @@
 
 import numpy as np
 import cv2
-#from utils.controller import Controller # Original controller implementation by Rafael Sonderegger, opted using simplePid library instead
 from simple_pid import PID # Simple PID library by Brett Beauregard
-import yaml
 
-from utils.image_utils import *
 
 def findEdges(image):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -112,13 +109,6 @@ def find_middle_point(strip_1d):
     return idx_middle
 
 def calculateDistAngle(idx_middle_upper, idx_middle_lower, strip_width, strip_height):
-    # Calculate distance and angle from middle of the track
-    # idx_middle_upper: index of middle point on upper edge of strip
-    # idx_middle_lower: index of middle point on lower edge of strip
-    # strip_width: width of the strip
-    # strip_height: height of the strip
-    # return: distance and angle
-    
     # Compute distance to middleline
     distance_to_middleline = strip_width // 2 - idx_middle_lower
     # Compute angular error
@@ -188,28 +178,21 @@ def action_sinusoidalTrajectory(t, freq, observation, Amplitude, target_velocity
     # Observations are the following:
     image = observation['image']
     velocity = observation['velocity']
-
     # Environment constants
     carPos = np.array([70, 48]) # Position of the car in the image (pixel coordinates)
     widthOfTrack = 20 # Approx width of the track in pixels
-
     # Initialize controllers
     pid_angle = PID(0.5, -0.2, 0.0, setpoint=0)
     pid_velocity = PID(0.05, 0.1, 0.1, setpoint=target_velocity)
-
     # Find the next target point of sinusoidal trajectory
     scale_dist = 10 # This scales the vertical distance of the next target point from tip of car
     targetPoint, estimatedMiddlePoint, vector_track_normalized, vector_track_perp_normalized = calculateTargetPoint(image, widthOfTrack, freq, scale_dist , Amplitude, t)
-    
     if targetPoint is None:
         action = [0,0,0] # If unreasonable values where found for the target point, keep the previous action. This avoids an edge case error
         return action
-
     # Calculate the angle to the target point
     error = targetPoint - carPos
     carVector = np.array([-1, 0])
-    
-
     angle = np.arccos(np.dot(error, carVector) / (np.linalg.norm(error) * np.linalg.norm(carVector)))
     #Check if the angle is positive or negative -> negative full left turn, positive full right turn        
     if error[1] > 0:
@@ -222,75 +205,10 @@ def action_sinusoidalTrajectory(t, freq, observation, Amplitude, target_velocity
         breaking = -acc
         acc = 0
     action = [steeringAngle, acc, breaking]
-
     #print("Actions: ", action)
     return action
-    
-def fetch_hyperparams_from_yaml(file_path):
-    with open(file_path, 'r') as file:
-        hyperparams = yaml.safe_load(file)
-    return hyperparams
 
 
 
-def trajectory_control(augmImg, 
-                       strip_distance, 
-                       car_pos_vector, 
-                       pid_steering, 
-                       pid_velocity, 
-                       error_buffer,
-                       error_buffer_2,
-                       error_velocity_buffer,
-                       v_wFrame,
-                       MODE):
-  
-    # ------ TRAJECTORY CONTROL ------ #
-    dict_masks = maskTrajectories(augmImg)
-    track_img = dict_masks[MODE] # Get the correct mask for the desired agent
-
-    # Get single line strip in front of car
-    line_strip = track_img[strip_distance, :]
-    idx = np.nonzero(line_strip)[0]
-
-    action = [0.0, 0.0, 0.0]  # Initialize the action variable
-
-    if len(idx) == 0: # Rarely happens, but sometimes at the thightest curve we lose intersection of strip with trajectory -> -1 angle
-        action[0] = -1.0
-        return action
-
-    idx = idx[np.argmin(np.abs(idx - 48))]
-    target_point = np.array([strip_distance, idx])
-    car2point_vector = target_point - car_pos_vector # As an approximation let angle be the x component of the car2point vector
-
-    # ------  PID CONTROL  ------ #
-    err =  idx - 48.0 # Correcting for the fact that negative value is a left turn, i.e., positive angle
-    err = np.clip(err, -5, 5) # Clip the error to avoid large changes of steering angle going to infinity
-    if np.linalg.norm(err) <= 2: # Attenuate errors close to target trajectory -- otherwise we get oscillations
-        err = 0.3 * err
-    # Buffer for error data -- used for smoothing the error signal -- Simple averaging filter over 10 steps and then 3 steps
-    error_buffer.append(err)
-    error_avg = sum(error_buffer) / len(error_buffer)
-    error_buffer_2.append(error_avg)
-    error_avg_2 = sum(error_buffer_2) / len(error_buffer_2)
 
 
-    angle = np.arctan2(abs(error_avg_2), abs(car2point_vector[0]))
-    if error_avg_2 > 0:
-        angle = -angle  # Negative angle is a left turn
-    action[0] = pid_steering(angle)
-
-    # ------  VELOCITY CONTROL  ------ #
-    error_vel = pid_velocity.setpoint - np.linalg.norm(v_wFrame)
-    if np.linalg.norm(error_vel) < 2.0:
-        error_vel = 0.0 * error_vel # Attenuate errors close to target velocity -- otherwise we get oscillations 
-    error_velocity_buffer.append(error_vel)
-    error_vel_avg = sum(error_velocity_buffer) / len(error_velocity_buffer)
-
-    if error_vel_avg < 0:
-        action[1] = 0
-        action[2] = np.clip(np.linalg.norm(pid_velocity(np.linalg.norm(v_wFrame))), 0, 0.9)
-    else:
-        action[1] = pid_velocity(np.linalg.norm(v_wFrame))
-        action[2] = 0
-
-    return action
