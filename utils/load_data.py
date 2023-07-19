@@ -3,9 +3,15 @@ import os
 import pickle
 import zarr
 import torch
-import matplotlib.pyplot as plt
+import yaml
+
 from torch.utils.data import DataLoader, random_split
 import pytorch_lightning as pl
+
+def fetch_hyperparams_from_yaml(file_path):
+    with open(file_path, 'r') as file:
+        hyperparams = yaml.safe_load(file)
+    return hyperparams
 
 # normalize data
 def get_data_stats(data):

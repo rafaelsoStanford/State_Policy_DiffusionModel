@@ -156,7 +156,7 @@ for run in range(2):
     
       # Continue to drive and saving predicted trajectory
       if steps < start_steps + pred_horizon:
-        action =trajectory_control(augmImg, 
+        action_ =trajectory_control(augmImg, 
                       strip_distance, 
                       car_pos_vector, 
                       pid_steering, 
@@ -167,6 +167,10 @@ for run in range(2):
                       v_wFrame,
                       "middle")
         
+        if action is not None:
+          action = action_
+           
+
         obs, _, done, info = env.step(action)
         
         pos_buffer_pred.append(carPosition_wFrame)

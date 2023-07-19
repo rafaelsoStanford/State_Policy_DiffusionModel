@@ -2,23 +2,12 @@ from models.diffusion_ddpm import *
 from models.diffusion_ddim import *
 from utils.load_data import *
 
-import os
-import yaml
-
-def fetch_hyperparams_from_yaml(file_path):
-    with open(file_path, 'r') as file:
-        hyperparams = yaml.safe_load(file)
-    return hyperparams
-
 
 ############################
 #========== MAIN ===========
 ############################
 
 def main():
-    # Some params, dont know where to put them
-    AMP = True
-    n_epochs = 1
     batch_size = 1
 
     # =========== Load Model ===========
