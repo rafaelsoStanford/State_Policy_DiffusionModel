@@ -26,3 +26,4 @@ MinMax.pkl
 run.sh
 *__pycache__*
 .gitingore
+states_list.pkl
