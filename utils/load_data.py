@@ -215,7 +215,8 @@ class CarRacingDataset_forInference(CarRacingDataset):
                  dataset_path: str,
                  pred_horizon: int,
                  obs_horizon: int,
-                 stats: dict
+                 stats: dict,
+                 states: list
                  ):
         
         self.obs_horizon = obs_horizon
@@ -223,6 +224,7 @@ class CarRacingDataset_forInference(CarRacingDataset):
         self.sequence_len = obs_horizon + pred_horizon # chunk length of data
         self.train_data = {}
         self.stats = stats
+        self.states = states
         self._create_dataset(dataset_path)
         
     def _create_dataset(self, dataset_path):
@@ -243,6 +245,10 @@ class CarRacingDataset_forInference(CarRacingDataset):
             self.train_data['image'] = train_image_data
             self.train_data['angle'] = train_data['angle']
 
+            self.train_data['states'] = self.states
+
+
+
     def _normalize_sample(self, nsample):
         sample_normalized = normalize_data(nsample['position'], self.stats['position'])
         translation_vec = sample_normalized[0, :]
@@ -254,7 +260,7 @@ class CarRacingDataset_forInference(CarRacingDataset):
 # ====== DataModule ====== #
 # ----- CarRacingDataModule is a Pytorch Lightning DataModule
 class CarRacingDataModule(pl.LightningDataModule):
-    def __init__(self, batch_size,  data_dir: str = "path/to/dir" , T_obs=4, T_pred=8 , seed=None, stats=None):
+    def __init__(self, batch_size,  data_dir: str = "path/to/dir" , T_obs=4, T_pred=8 , seed=None, stats=None, states=None):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
@@ -265,14 +271,16 @@ class CarRacingDataModule(pl.LightningDataModule):
         self.data_val = None
         self.seed = seed
         self.stats = stats
+        self.states = states
 
     def setup(self, name: str = None):
         # ----- CarRacingDataset is a Dataloader file, takes care of normalization and such-----
-        if self.stats:
+        if self.stats and self.states:
             self.data_full = CarRacingDataset_forInference(  dataset_path= os.path.join(self.data_dir, name),
                                             pred_horizon=self.T_pred,
                                             obs_horizon=self.T_obs,
-                                            stats=self.stats
+                                            stats=self.stats,
+                                            states=self.states
                                             )
         else: 
             self.data_full = CarRacingDataset(  dataset_path= os.path.join(self.data_dir, name),

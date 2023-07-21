@@ -45,6 +45,8 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
         env.reset()
         action = np.array([0, 0, 0], dtype=np.float32)
         obs, _ , _, info = env.step(action) # Take a step to get the environment initialized (action is empty)
+        state = env.car._save_state()
+        state_hist.append(state)
 
         # ======================  START EPISODE  ====================== #
         for _ in range(max_steps):
@@ -128,3 +130,7 @@ if __name__ == "__main__":
     print()
 
     generate_data(args)
+
+    with open('states_list.pkl', 'rb') as f:
+        states = pickle.load(f)
+    print(states[0])
