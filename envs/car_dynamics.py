@@ -136,41 +136,58 @@ class Car:
         self.particles = []
 
     def _save_state(self):
-        self._saved_state = {
-            "hull": {
-                "position": self.hull.position.copy(),
-                "angle": self.hull.angle,
-                "linearVelocity": self.hull.linearVelocity,
-                "angularVelocity": self.hull.angularVelocity,
-            },
-            "wheels": [
-                {
-                    "wheel_rad": w.wheel_rad,
-                    "gas": w.gas,
-                    "brake": w.brake,
-                    "steer": w.steer,
-                    "phase": w.phase,
-                    "omega": w.omega,
-                }
-                for w in self.wheels
-            ],
-        }
 
-        return self._saved_state
-    
+        """
+        Structure of the Saved State (in this order)):
+            - hull.position (Vec2D): The position of the hull.
+            - hull.angle (float): The angle of the hull.
+            - hull.linearVelocity (Vec2D): The linear velocity of the hull.
+            - hull.angularVelocity (float): The angular velocity of the hull.
+            - For each wheel in self.wheels, the following attributes are saved (from 1 to 4th wheel)):
+                - wheel_rad (float): The radius of the wheel.
+                - gas (float): The gas applied to the wheel.
+                - brake (float): The brake applied to the wheel.
+                - steer (float): The steering angle of the wheel.
+                - phase (float): The phase of the wheel.
+                - omega (float): The angular velocity of the wheel.
+        """
+        # Initialize the saved state list
+        self._saved_state = []
+
+        # Save hull attributes in order: x, y, angle, linearVelocity, angularVelocity
+        self._saved_state.append(self.hull.position.x)  # Save x-coordinate
+        self._saved_state.append(self.hull.position.y)  # Save y-coordinate
+        self._saved_state.append(self.hull.angle)
+        self._saved_state.append(self.hull.linearVelocity)
+        self._saved_state.append(self.hull.angularVelocity)
+
+        # Save wheel attributes for each wheel in order: wheel_rad, gas, brake, steer, phase, omega
+        for w in self.wheels:
+            wheel_data = [
+                w.wheel_rad,
+                w.gas,
+                w.brake,
+                w.steer,
+                w.phase,
+                w.omega
+            ]
+            self._saved_state.append(wheel_data)
+
     def _restore_state(self, saved_state):
-        self.hull.position = saved_state["hull"]["position"]
-        self.hull.angle = saved_state["hull"]["angle"]
-        self.hull.linearVelocity = saved_state["hull"]["linearVelocity"]
-        self.hull.angularVelocity = saved_state["hull"]["angularVelocity"]
+        self.hull.position.x = saved_state[0]  # Restore x-coordinate
+        self.hull.position.y = saved_state[1]  # Restore y-coordinate
+        self.hull.angle = saved_state[2]
+        self.hull.linearVelocity = saved_state[3]
+        self.hull.angularVelocity = saved_state[4]
 
-        for w, saved_w in zip(self.wheels, saved_state["wheels"]):
-            w.wheel_rad = saved_w["wheel_rad"]
-            w.gas = saved_w["gas"]
-            w.brake = saved_w["brake"]
-            w.steer = saved_w["steer"]
-            w.phase = saved_w["phase"]
-            w.omega = saved_w["omega"]
+        # Restore wheel attributes for each wheel
+        for i, w in enumerate(self.wheels):
+            w.wheel_rad = saved_state[i + 5][0]
+            w.gas = saved_state[i + 5][1]
+            w.brake = saved_state[i + 5][2]
+            w.steer = saved_state[i + 5][3]
+            w.phase = saved_state[i + 5][4]
+            w.omega = saved_state[i + 5][5]
 
     def gas(self, gas):
         """control: rear wheel drive
@@ -348,3 +365,4 @@ class Car:
         for w in self.wheels:
             self.world.DestroyBody(w)
         self.wheels = []
+
