@@ -1,12 +1,12 @@
-import os
 import sys
-import shutil
-import zarr
+
 import numpy as np
 import argparse
 from simple_pid import PID 
 from collections import deque
 from datetime import datetime
+
+import pickle
 
 # setting path
 sys.path.append('../diffusion_bare')
@@ -32,6 +32,9 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
         # -----  Initialize history lists ----- #
         img_hist, vel_hist ,act_hist, pos_hist, angle_hist = [], [], [], [], []
 
+        # State history
+        state_hist = []
+
         #----- PID controllers ----- #
         pid_velocity = PID(0.005, 0.001, 0.0005, setpoint=VELOCITIES[0])
         pid_steering = PID(0.8, 0.01, 0.06, setpoint=0) 
@@ -42,6 +45,8 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
         env.reset()
         action = np.array([0, 0, 0], dtype=np.float32)
         obs, _ , _, info = env.step(action) # Take a step to get the environment initialized (action is empty)
+        state = env.car._save_state()
+        state_hist.append(state)
 
         # ======================  START EPISODE  ====================== #
         for _ in range(max_steps):
@@ -61,7 +66,16 @@ def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
             action = action_
             obs, _ , _ , info = env.step(action)      
             tc_utils.append_to_histories(obs, carVelocity_wFrame, carPosition_wFrame, action, car_heading_angle, img_hist, vel_hist, pos_hist, act_hist, angle_hist)
+
+            state = env.car._save_state()
+            state_hist.append(state)
+
         env.close()
+
+        # -----  Save state history ----- #
+        # Save to a binary file
+        with open("states_list.pkl", "wb") as file:
+            pickle.dump(state_hist, file)
         
         # -----  Save data to buffer ----- #
         tc_utils.save_data_to_buffer(buffer, img_hist, act_hist, vel_hist, pos_hist, angle_hist)
@@ -116,3 +130,7 @@ if __name__ == "__main__":
     print()
 
     generate_data(args)
+
+    with open('states_list.pkl', 'rb') as f:
+        states = pickle.load(f)
+    print(states[0])

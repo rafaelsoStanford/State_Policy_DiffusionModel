@@ -1,52 +1,29 @@
 
 animations/
-
-encoder/__pycache__/
-envs/__pycache__/
-
 generateData/testing/generateTwoParallelTraj.py
 generateData/testing/utils/car_dynamics.py
 generateData/testing/utils/car_racing.py
 generateData/testing/utils/controller.py
 generateData/testing/utils/functions.py
 generateData/testing/utils/replay_buffer.py
-
-generateData/testing/utils/__pycache__/
-
-
 lightning_logs/
 models/diffusion.py
-models/__pycache__/UNet_Transformer.cpython-39.pyc
 models/encoder/finetune_resnet.py
-models/encoder/__pycache__/autoencoder.cpython-39.pyc
-
-
 tb_logs_autoencoder/
 test/diffusion.py
 test/test.py
 test/Unet_FiLmLayer.py
 test/
-test/__pycache__/
-utils/__pycache__/
 execution_summary.txt
 run.sh
-__pycache__/
 animations/
 stats.pkl
 tb_logs/
-encoder/__pycache__ /
-envs/__pycache__ /
-utils/__pycache__ /
-
 run.sh
 data/
-generateData/utils/__pycache__/
-
-
 MinMax.pkl
-utils/__pycache__/load_data.cpython-39.pyc
-
 .vscode/settings.json
 run.sh
-utils/__pycache__/
-envs/__pycache__/
+*__pycache__*
+.gitingore
+states_list.pkl
