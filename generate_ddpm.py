@@ -23,7 +23,6 @@ def main():
     path_hyperparams = './tb_logs/version_624/hparams.yaml'
     path_checkpoint = './tb_logs/version_624/checkpoints/epoch=35.ckpt'
     filepath = './tb_logs/version_624/STATS.pkl'
-    #dataset_name = '2023-07-15-1711_dataset_1_episodes_2_modes.zarr.zip'
     dataset_name = '2023-07-17-2252_dataset_1_episodes_2_modes.zarr.zip'
 
     model = Diffusion_DDPM.load_from_checkpoint(
@@ -56,7 +55,7 @@ def main():
 
     # ---- get a batch of data ----
     batch = next(iter(test_dataloader))
-    x_0_predicted, _, _ = model.sample(batch=batch[0], mode='validation')
+    x_0_predicted, _, _ = model.sample(batch=batch, mode='validation')
     
     translation_vector = batch[1].squeeze().cpu().detach().numpy()
    
