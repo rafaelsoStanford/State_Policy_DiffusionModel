@@ -1,5 +1,4 @@
 
-
 import matplotlib.pyplot as plt
 import yaml
 import sys
@@ -16,7 +15,7 @@ from utils.load_data import *
 from generateData.trajectory_control_utils import *
 from models.diffusion_ddpm import *
 
-
+# Define functions
 def fetch_hyperparams_from_yaml(file_path):
     with open(file_path, 'r') as file:
         hyperparams = yaml.safe_load(file)
@@ -33,9 +32,9 @@ def normalize_position(sample, stats):
 
 # =========== Load data ===========
 dataset_path = "./evaluation/data/2023-07-21-1537/EvaluationDataset_left_dataset_1_episodes_1_modes.zarr.zip"
-filepath = './tb_logs/version_624/STATS.pkl'
-path_checkpoint = './tb_logs/version_624/checkpoints/epoch=35.ckpt'
-path_hyperparams = './tb_logs/version_624/hparams.yaml'
+filepath = './tb_logs/version_629/STATS.pkl'
+path_checkpoint = './tb_logs/version_629/checkpoints/epoch=39.ckpt'
+path_hyperparams = './tb_logs/version_629/hparams.yaml'
 
 print("*** Loading Data ...")
 dataset_root = zarr.open(dataset_path, 'r')
@@ -162,8 +161,8 @@ nAction_predicted = x_0_predicted[:, 2:5]
 action_pred = unnormalize_data(nAction_predicted, stats['action']) # Includes inpainted points
 nPosition_predicted = x_0_predicted[:, 0:2]
 position_pred = unnormalize_data(2* nPosition_predicted + Translation, stats['position']) # Includes inpainted points
-action_pred = action_pred[inpaint_horizon:]
-position_pred = position_pred[inpaint_horizon:]
+action_pred = action_pred[:]
+position_pred = position_pred[:]
 
 print(" Sampled action: ", action_pred.shape)
 print(" Sampled position: ", position_pred.shape)
@@ -214,7 +213,7 @@ pos_hist = np.array(pos_hist)
 observed_traj = pos_hist[start_t:]
 
 
-
+# Plotting
 plt.plot(data['position'][:,0],data['position'][:,1], c='b', label = "Track Groundtruth positions")
 plt.scatter(observed_traj[:,0], observed_traj[:,1], c='c', s=30, marker='o' , label = "Observed trajectory from groundtruth actions")
 plt.scatter(data['position'][start_t:end_t,0], data['position'][start_t:end_t,1], c='r', s=20, marker='o', label = "Groundtruth trajectory from groundtruth positions")
@@ -222,5 +221,3 @@ plt.scatter(actions_saved_traj[:,0], actions_saved_traj[:,1], c='y', s=20, marke
 plt.scatter(position_pred[:,0], position_pred[:,1], c='g', s=20, marker='x', label = "Diffusion based trajectory")
 plt.legend()
 plt.show()
-
-
