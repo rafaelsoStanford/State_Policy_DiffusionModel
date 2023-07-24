@@ -30,26 +30,28 @@ SEED = 42
 MODE = 'state_pixels'
 ENV_SEED = 42
 EXPERIMENT_NAME = 'Precision evaluations' 
-NUM_RUNS = 20
+NUM_RUNS = 50
 
 # # paths
+dataset_path = './data/2023-07-20-1827_dataset_1_episodes_2_modes.zarr.zip'
 # dataset_path = "./evaluation/data/2023-07-21-1537/EvaluationDataset_left_dataset_1_episodes_1_modes.zarr.zip"
 # filepath = './tb_logs/version_629/STATS.pkl'
 # path_checkpoint = './tb_logs/version_629/checkpoints/epoch=39.ckpt'
 # path_hyperparams = './tb_logs/version_629/hparams.yaml'
 
 
-path_hyperparams = './tb_logs/version_624/hparams.yaml'
-path_checkpoint = './tb_logs/version_624/checkpoints/epoch=35.ckpt'
-filepath = './tb_logs/version_624/STATS.pkl'
-#dataset_name = '2023-07-15-1711_dataset_1_episodes_2_modes.zarr.zip'
-dataset_path = './data/2023-07-20-1827_dataset_1_episodes_2_modes.zarr.zip'
+
+# path_hyperparams = './tb_logs/version_624/hparams.yaml'
+# path_checkpoint = './tb_logs/version_624/checkpoints/epoch=35.ckpt'
+# filepath = './tb_logs/version_624/STATS.pkl'
+# #dataset_name = '2023-07-15-1711_dataset_1_episodes_2_modes.zarr.zip'
+# dataset_path = './data/2023-07-20-1827_dataset_1_episodes_2_modes.zarr.zip'
 
 
 # dataset_path = "./evaluation/data/2023-07-21-1537/EvaluationDataset_left_dataset_1_episodes_1_modes.zarr.zip"
-# filepath = './tb_logs/version_630/STATS.pkl'
-# path_checkpoint = './tb_logs/version_630/checkpoints/epoch=41.ckpt'
-# path_hyperparams = './tb_logs/version_630/hparams.yaml'
+filepath = './tb_logs/version_630/STATS.pkl'
+path_checkpoint = './tb_logs/version_630/checkpoints/epoch=41.ckpt'
+path_hyperparams = './tb_logs/version_630/hparams.yaml'
 
 # dataset_path = "./evaluation/data/2023-07-21-1537/EvaluationDataset_left_dataset_1_episodes_1_modes.zarr.zip"
 # filepath = './tb_logs/version_631/STATS.pkl'
@@ -216,6 +218,9 @@ for i in range(NUM_RUNS):
 # ======================  Plotting the results  =================================== #
 # ================================================================================= #
 
+
+SAVING = True
+
 plt.figure(figsize=(20, 20))
 
 for i in range(NUM_RUNS):
@@ -232,18 +237,18 @@ plt.plot(data['position'][start_t:end_t, 0], data['position'][start_t:end_t, 1],
 plt.legend()
 plt.xlabel('x')
 plt.ylabel('y')
-folder_name = folder_name = "./evaluation/results/eval_precision"  # You can change this to the desired folder name
-# Get the horizon information
-horizon_info = f"obs_{obs_horizon}_pred_{pred_horizon}_inpaint_{inpaint_horizon}"
-# Specify the file name for the plot (with extension)
-plot_file_name = f"predicted_actions_trajectories_{horizon_info}.png"  # You can change the file name if needed
-# Save the plot to the specified folder with the given file name
-plt.savefig(os.path.join(folder_name, plot_file_name))
+
+if SAVING:
+    folder_name = folder_name = "./evaluation/results/eval_precision"  # You can change this to the desired folder name
+    # Get the horizon information
+    horizon_info = f"obs_{obs_horizon}_pred_{pred_horizon}_inpaint_{inpaint_horizon}"
+    # Specify the file name for the plot (with extension)
+    plot_file_name = f"predicted_actions_trajectories_{horizon_info}.png"  # You can change the file name if needed
+    # Save the plot to the specified folder with the given file name
+    plt.savefig(os.path.join(folder_name, plot_file_name))
 plt.show()
 
-
 plt.figure(figsize=(20, 20))
-
 for i in range(NUM_RUNS):
     if i == 0:
         plt.plot(results_positions_pred[i][inpaint_horizon-1:, 0], results_positions_pred[i][inpaint_horizon-1:, 1], label='Predicted trajectory', c = 'orange', linewidth=1)
@@ -262,8 +267,75 @@ plt.legend()
 plt.xlabel('x')
 plt.ylabel('y')
 
-# Specify the file name for the plot (with extension)
-plot_file_name = f"predicted_trajectories_{horizon_info}.png"  # You can change the file name if needed
-# Save the plot to the specified folder with the given file name
-plt.savefig(os.path.join(folder_name, plot_file_name))
+if SAVING:
+    # Specify the file name for the plot (with extension)
+    plot_file_name = f"predicted_trajectories_{horizon_info}.png"  # You can change the file name if needed
+    # Save the plot to the specified folder with the given file name
+    plt.savefig(os.path.join(folder_name, plot_file_name))
 plt.show()
+
+
+# Calculate squared errors for each point in the trajectory
+error_sq_array = []
+for trajectory in results_actions_trajectories:
+    distance = trajectory - data['position'][start_t + obs_horizon:end_t]
+    norm = np.linalg.norm(distance, axis=1) ** 2
+    error_sq_array.append(norm.copy())
+error_sq_array = np.array(error_sq_array)
+
+# Calculate the mean standard deviation along the trajectory
+std_along_traj = np.sqrt(1 / (NUM_RUNS - 1) * np.sum(error_sq_array, axis=0))
+
+# Calculate standard deviation for each time step in both x and y axes
+std_x_list = []
+std_y_list = []
+for trajectory in results_actions_trajectories:
+    distance = trajectory - data['position'][start_t + obs_horizon:end_t]
+    error_x = distance[:, 0] ** 2
+    std_x_list.append(error_x.copy())
+    error_y = distance[:, 1] ** 2
+    std_y_list.append(error_y.copy())
+
+std_x_along_traj = np.sqrt(1 / (NUM_RUNS - 1) * np.sum(np.array(std_x_list), axis=0))
+std_y_along_traj = np.sqrt(1 / (NUM_RUNS - 1) * np.sum(np.array(std_y_list), axis=0))
+
+# Plot mean standard deviation along the trajectory
+plt.figure(figsize=(20, 20))
+plt.plot(std_along_traj, label='Mean Standard Deviation')
+plt.title('Mean Standard Deviation Along the Trajectory')
+text_str = f"Horizon parameters:    Observation Horizon {obs_horizon}\nPrediction Horizon {pred_horizon}\nInpaint Horizon {inpaint_horizon}"
+plt.text(0.5, 0.05, text_str, transform=plt.gca().transAxes, ha='right', va='bottom', fontsize=12)
+plt.xlabel('Time Step')
+plt.ylabel('Standard Deviation')
+plt.legend()
+plt.show()
+
+if SAVING:
+    # Specify the file name for the plot (with extension)
+    plot_file_name = f"mean_std_deviation{horizon_info}.png"  # You can change the file name if needed
+    # Save the plot to the specified folder with the given file name
+    plt.savefig(os.path.join(folder_name, plot_file_name))
+plt.show()
+
+
+# Plot predicted trajectory with error bars
+plt.figure(figsize=(20, 20))
+plt.errorbar(data['position'][start_t + obs_horizon:end_t, 0], data['position'][start_t + obs_horizon:end_t, 1],
+             yerr=std_y_along_traj, xerr=std_x_along_traj, fmt='o', color='r', alpha=0.7, label='Predicted Trajectory')
+plt.plot(data['position'][start_t:end_t, 0], data['position'][start_t:end_t, 1], label='Actual Trajectory', c='b')
+plt.title('Predicted Trajectory with Error Bars')
+text_str = f"Horizon parameters:    Observation Horizon {obs_horizon}\nPrediction Horizon {pred_horizon}\nInpaint Horizon {inpaint_horizon}"
+plt.text(0.5, 0.05, text_str, transform=plt.gca().transAxes, ha='right', va='bottom', fontsize=12)
+plt.legend()
+plt.xlabel('x')
+plt.ylabel('y')
+plt.show()
+
+if SAVING:
+    # Specify the file name for the plot (with extension)
+    plot_file_name = f"Error_Bars2d{horizon_info}.png"  # You can change the file name if needed
+    # Save the plot to the specified folder with the given file name
+    plt.savefig(os.path.join(folder_name, plot_file_name))
+plt.show()
+
+
