@@ -308,7 +308,7 @@ plt.text(0.5, 0.05, text_str, transform=plt.gca().transAxes, ha='right', va='bot
 plt.xlabel('Time Step')
 plt.ylabel('Standard Deviation')
 plt.legend()
-plt.show()
+
 
 if SAVING:
     # Specify the file name for the plot (with extension)
@@ -329,7 +329,6 @@ plt.text(0.5, 0.05, text_str, transform=plt.gca().transAxes, ha='right', va='bot
 plt.legend()
 plt.xlabel('x')
 plt.ylabel('y')
-plt.show()
 
 if SAVING:
     # Specify the file name for the plot (with extension)
