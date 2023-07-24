@@ -1,4 +1,4 @@
-# %% Imports
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.cm import get_cmap
@@ -7,46 +7,46 @@ import io
 import torch
 from matplotlib.animation import FuncAnimation
 
-# %% Plotting
-def my_plotter(ax, data1, data2, param_dict):
-    """
+# # %% Plotting
+# def my_plotter(ax, data1, data2, param_dict):
+#     """
 
-    # source: https://matplotlib.org/stable/tutorials/introductory/usage.html#sphx-glr-tutorials-introductory-usage-pyimport matplotlib.pyplot as plt
+#     # source: https://matplotlib.org/stable/tutorials/introductory/usage.html#sphx-glr-tutorials-introductory-usage-pyimport matplotlib.pyplot as plt
 
-    A helper function to make a graph
-    Parameters
-    ----------
-    ax : Axes
-        The axes to draw to
+#     A helper function to make a graph
+#     Parameters
+#     ----------
+#     ax : Axes
+#         The axes to draw to
 
-    data1 : array
-       The x data
+#     data1 : array
+#        The x data
 
-    data2 : array
-       The y data
+#     data2 : array
+#        The y data
 
-    param_dict : dict
-       Dictionary of kwargs to pass to ax.plot
+#     param_dict : dict
+#        Dictionary of kwargs to pass to ax.plot
 
-    Returns
-    -------
-    out : list
-        list of artists added
-    """
-    out = ax.plot(data1, data2, **param_dict)
-    return out
-
-# ? Examples
-# 1 sub-plot example
-data1, data2, data3, data4 = np.random.randn(4, 100)
-fig, ax = plt.subplots(1, 1)
-my_plotter(ax, data1, data2, {'marker': 'x'})
+#     Returns
+#     -------
+#     out : list
+#         list of artists added
+#     """
+#     out = ax.plot(data1, data2, **param_dict)
+#     return out
 
 
-# 2 sub-plots example
-fig, (ax1, ax2) = plt.subplots(1, 2)
-my_plotter(ax1, data1, data2, {'marker': 'x'})
-my_plotter(ax2, data3, data4, {'marker': 'o'});
+# # 1 sub-plot example
+# data1, data2, data3, data4 = np.random.randn(4, 100)
+# fig, ax = plt.subplots(1, 1)
+# my_plotter(ax, data1, data2, {'marker': 'x'})
+
+
+# # 2 sub-plots example
+# fig, (ax1, ax2) = plt.subplots(1, 2)
+# my_plotter(ax1, data1, data2, {'marker': 'x'})
+# my_plotter(ax2, data3, data4, {'marker': 'o'});
 
 
 
