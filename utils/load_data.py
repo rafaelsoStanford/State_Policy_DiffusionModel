@@ -97,11 +97,11 @@ class CarRacingDataset(torch.utils.data.Dataset):
         return nsample
 
     def __getitem__(self, idx):
-        buffer_start_idx, buffer_end_idx, sample_start_idx, sample_end_idx = self.indices[idx]
+        start_idx, end_idx, _ , _ = self.indices[idx]
         nsample = sample_sequence_sparse(
                 data=self.train_data,
-                sample_start_idx= buffer_start_idx,
-                sample_end_idx= buffer_end_idx,
+                sample_start_idx= start_idx,
+                sample_end_idx= end_idx,
                 step_size=10,
             )
         return self._normalize_sample(nsample)
