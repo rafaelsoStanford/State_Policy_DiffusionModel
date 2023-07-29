@@ -18,7 +18,7 @@ import numpy as np
 sys.path.append('../diffusion_bare')
 
 from envs.car_racing import CarRacing
-from utils.load_data import *
+from utils.data_utils import *
 from generateData.trajectory_control_utils import *
 from models.diffusion_ddpm import *
 
