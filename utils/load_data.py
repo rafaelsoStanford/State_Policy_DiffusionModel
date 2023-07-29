@@ -322,7 +322,7 @@ class CarRacingDataModule(pl.LightningDataModule):
         return DataLoader(self.data_train, batch_size=self.batch_size, shuffle=True, num_workers=4)
 
     def val_dataloader(self):
-        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=True, num_workers=4)
+        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=False, num_workers=4)
     
     def save_stats(self, path):
         with open(path, 'wb') as f:
