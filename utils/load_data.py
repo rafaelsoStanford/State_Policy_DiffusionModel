@@ -38,73 +38,42 @@ def save_stats(stats, save_path):
     with open(save_path, 'wb') as f:
         pickle.dump(stats, f)
 
-def create_sample_indices(
-        episode_ends:np.ndarray, sequence_length:int,
-        pad_before: int=0, pad_after: int=0):
+
+def create_sample_indices_sparse(ends, sequence_lenght, step_size):
     indices = list()
-    for i in range(len(episode_ends)):
-        start_idx = 0
-        if i > 0:
-            start_idx = episode_ends[i-1]
-        end_idx = episode_ends[i]
-        episode_length = end_idx - start_idx # All index in one episode
+    prev_end = 0
+    # iterate over the ending indexes
+    for end in ends:
+        # calculate start indexes for current sub-signal
+        starts = np.arange(prev_end, end - sequence_lenght + 1, 1) # All starting points for the segments in the current episode
+        # take slices of sequence_lenght for current sub-signal, and append to dataset
+        for start in starts:
+            if start + sequence_lenght*step_size <= end:
+                # create a segment directory
+                segment = {}
+                # add all data to the segment
+                segment_end = start + sequence_lenght*step_size
+                segment_start = start
+                # append segment to dataset
+                indices.append([segment_start, segment_end, 0 , sequence_lenght]) # start, end, sample_start, sample_end
+        # update previous end
+        prev_end = end
+    return indices 
 
-        min_start = -pad_before
-        max_start = episode_length - sequence_length + pad_after
 
-        # range stops one idx before end
-        for idx in range(min_start, max_start+1):
-            buffer_start_idx = max(idx, 0) + start_idx
-            buffer_end_idx = min(idx+sequence_length, episode_length) + start_idx
-            start_offset = buffer_start_idx - (idx+start_idx)
-            end_offset = (idx+sequence_length+start_idx) - buffer_end_idx
-            sample_start_idx = 0 + start_offset
-            sample_end_idx = sequence_length - end_offset
-            indices.append([
-                buffer_start_idx, buffer_end_idx,
-                sample_start_idx, sample_end_idx])
-    indices = np.array(indices)
-    return indices
+def sample_sequence_array_sparse(data_array, step_size,
+                    sample_start_idx, sample_end_idx):
+    input_array = data_array
+    sample = input_array[sample_start_idx:sample_end_idx:step_size]
+    return sample
 
-def sample_sequence_array(train_data, sequence_length,
-                    buffer_start_idx, buffer_end_idx,
+def sample_sequence_sparse(data,  step_size,
                     sample_start_idx, sample_end_idx):
     result = dict()
-    input_array = train_data
-    sample = input_array[buffer_start_idx:buffer_end_idx]
-    data = sample
-    if (sample_start_idx > 0) or (sample_end_idx < sequence_length):
-        data = np.zeros(
-            shape=(sequence_length,) + input_array.shape[1:],
-            dtype=input_array.dtype)
-        if sample_start_idx > 0:
-            data[:sample_start_idx] = sample[0]
-        if sample_end_idx < sequence_length:
-            data[sample_end_idx:] = sample[-1]
-        data[sample_start_idx:sample_end_idx] = sample
-    result = data
+    for key, input_arr in data.items():
+        sample = input_arr[sample_start_idx:sample_end_idx:step_size]
+        result[key] = sample
     return result
-
-def sample_sequence(train_data, sequence_length,
-                    buffer_start_idx, buffer_end_idx,
-                    sample_start_idx, sample_end_idx):
-    result = dict()
-    for key, input_arr in train_data.items():
-        sample = input_arr[buffer_start_idx:buffer_end_idx]
-        data = sample
-        if (sample_start_idx > 0) or (sample_end_idx < sequence_length):
-            data = np.zeros(
-                shape=(sequence_length,) + input_arr.shape[1:],
-                dtype=input_arr.dtype)
-            if sample_start_idx > 0:
-                data[:sample_start_idx] = sample[0]
-            if sample_end_idx < sequence_length:
-                data[sample_end_idx:] = sample[-1]
-            data[sample_start_idx:sample_end_idx] = sample
-        result[key] = data
-    return result
-
-
 
 # ================== Dataset loader for Traing and Validation ==================
 # Path: utils/load_data.py
@@ -124,15 +93,23 @@ class CarRacingDataset(torch.utils.data.Dataset):
         
         self._create_dataset(dataset_path)
 
+
+
+
     def _create_dataset(self, dataset_path):
         train_image_data, train_data, episode_ends = self._load_data(dataset_path) 
 
-        self.indices = create_sample_indices(
-            episode_ends=episode_ends,
-            sequence_length=self.sequence_len,
-            pad_before=0,
-            pad_after=0
-        )
+        # self.indices = create_sample_indices(
+        #     episode_ends=episode_ends,
+        #     sequence_length=self.sequence_len,
+        # )
+
+        #? Modifications to the indices
+        self.indices = create_sample_indices_sparse(
+            ends=episode_ends,
+            sequence_lenght=self.sequence_len,
+            step_size=10
+            )
         
         self.stats = self._compute_stats(train_data, self.indices, self.obs_horizon, self.pred_horizon)
         normalized_action_data, normalized_velocity_data = self._normalize_data(train_data)
@@ -150,25 +127,35 @@ class CarRacingDataset(torch.utils.data.Dataset):
             'position': dataset_root['data']['position'][:],
             'velocity': dataset_root['data']['velocity'][:],
             'action': dataset_root['data']['action'][:],
-            'angle': dataset_root['data']['angle'][:],
         }
         episode_ends = dataset_root['meta']['episode_ends'][:]
 
         return train_image_data, train_data, episode_ends
     
     def _compute_stats(self, train_data, indices, obs_horizon, pred_horizon):
+        sample = None
         position_min = []
         position_max = []
         for i in range(len(indices)):
             buffer_start_idx, buffer_end_idx, sample_start_idx, sample_end_idx = indices[i]
-            sample = sample_sequence_array(
-                train_data=train_data['position'],
-                sequence_length=obs_horizon + pred_horizon,
-                buffer_start_idx=buffer_start_idx,
-                buffer_end_idx=buffer_end_idx,
-                sample_start_idx=sample_start_idx,
-                sample_end_idx=sample_end_idx
+            # sample = sample_sequence_array(
+            #     train_data=train_data['position'],
+            #     sequence_length=obs_horizon + pred_horizon,
+            #     buffer_start_idx=buffer_start_idx,
+            #     buffer_end_idx=buffer_end_idx,
+            #     sample_start_idx=sample_start_idx,
+            #     sample_end_idx=sample_end_idx
+            # )
+
+            # ? Modifications to the sample_sequence_array function
+            sample = sample_sequence_array_sparse(
+                data_array=train_data['position'],
+                sample_start_idx= buffer_start_idx,
+                sample_end_idx= buffer_end_idx,
+                step_size=10,
             )
+
+
             local_stats = get_data_stats(sample)
             position_max.append(local_stats['max'])
             position_min.append(local_stats['min'])
@@ -176,6 +163,7 @@ class CarRacingDataset(torch.utils.data.Dataset):
         action_stats = get_data_stats(train_data['action'])
         vel_stats = get_data_stats(train_data['velocity'])
         stats = {'position': pos_stats, 'velocity': vel_stats, 'action': action_stats}
+        
         return stats
     
     def _normalize_data(self, train_data):
@@ -197,26 +185,37 @@ class CarRacingDataset(torch.utils.data.Dataset):
     
     def __getitem__(self, idx):
         buffer_start_idx, buffer_end_idx, sample_start_idx, sample_end_idx = self.indices[idx]
-        nsample = sample_sequence(
-            train_data=self.train_data,
-            sequence_length=self.sequence_len,
-            buffer_start_idx=buffer_start_idx,
-            buffer_end_idx=buffer_end_idx,
-            sample_start_idx=sample_start_idx,
-            sample_end_idx=sample_end_idx
-        )
+
+        nsample = sample_sequence_sparse(
+                data=self.train_data,
+                sample_start_idx= buffer_start_idx,
+                sample_end_idx= buffer_end_idx,
+                step_size=10,
+            )
+
+        # ? Modifications to the sample_sequence function
+        # nsample = sample_sequence(
+        #     train_data=self.train_data,
+        #     sequence_length=self.sequence_len,
+        #     buffer_start_idx=buffer_start_idx,
+        #     buffer_end_idx=buffer_end_idx,
+        #     sample_start_idx=sample_start_idx,
+        #     sample_end_idx=sample_end_idx
+        # )
+
         return self._normalize_sample(nsample)
 
 # =========== data set class for inference ===========
 # During Inferrence, we load the stats from the training data set
 # Small changes to the _create_dataset method
+
+
 class CarRacingDataset_forInference(CarRacingDataset):
     def __init__(self,
                  dataset_path: str,
                  pred_horizon: int,
                  obs_horizon: int,
-                 stats: dict,
-                 states: list
+                 stats: dict
                  ):
         
         self.obs_horizon = obs_horizon
@@ -224,18 +223,25 @@ class CarRacingDataset_forInference(CarRacingDataset):
         self.sequence_len = obs_horizon + pred_horizon # chunk length of data
         self.train_data = {}
         self.stats = stats
-        self.states = states
         self._create_dataset(dataset_path)
         
     def _create_dataset(self, dataset_path):
             train_image_data, train_data, episode_ends = self._load_data(dataset_path) 
 
-            self.indices = create_sample_indices(
-                episode_ends=episode_ends,
-                sequence_length=self.sequence_len,
-                pad_before=0,
-                pad_after=0
-            )
+            # self.indices = create_sample_indices(
+            #     episode_ends=episode_ends,
+            #     sequence_length=self.sequence_len,
+            #     pad_before=0,
+            #     pad_after=0
+            # )
+
+
+        #? Modifications to the indices
+            self.indices = create_sample_indices_sparse(
+                ends=episode_ends,
+                sequence_lenght=self.sequence_len,
+                step_size=10
+                )
             
             normalized_action_data, normalized_velocity_data = self._normalize_data(train_data)
             
@@ -243,10 +249,6 @@ class CarRacingDataset_forInference(CarRacingDataset):
             self.train_data['velocity'] = normalized_velocity_data
             self.train_data['action'] = normalized_action_data
             self.train_data['image'] = train_image_data
-            self.train_data['angle'] = train_data['angle']
-
-            self.train_data['states'] = self.states
-
 
 
     def _normalize_sample(self, nsample):
@@ -256,11 +258,35 @@ class CarRacingDataset_forInference(CarRacingDataset):
         nsample['position'] = nsample_centered / 2.0
         return nsample, translation_vec
 
+    
+    def __getitem__(self, idx):
+        buffer_start_idx, buffer_end_idx, sample_start_idx, sample_end_idx = self.indices[idx]
+
+        nsample = sample_sequence_sparse(
+                data=self.train_data,
+                sample_start_idx= buffer_start_idx,
+                sample_end_idx= buffer_end_idx,
+                step_size=10,
+            )
+
+        # ? Modifications to the sample_sequence function
+        # nsample = sample_sequence(
+        #     train_data=self.train_data,
+        #     sequence_length=self.sequence_len,
+        #     buffer_start_idx=buffer_start_idx,
+        #     buffer_end_idx=buffer_end_idx,
+        #     sample_start_idx=sample_start_idx,
+        #     sample_end_idx=sample_end_idx
+        # )
+        
+        sample , translation =  self._normalize_sample(nsample)
+        return sample , translation
+
 
 # ====== DataModule ====== #
 # ----- CarRacingDataModule is a Pytorch Lightning DataModule
 class CarRacingDataModule(pl.LightningDataModule):
-    def __init__(self, batch_size,  data_dir: str = "path/to/dir" , T_obs=4, T_pred=8 , seed=None, stats=None, states=None):
+    def __init__(self, batch_size,  data_dir: str = "path/to/dir" , T_obs=4, T_pred=8 , seed=None, stats=None):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
@@ -271,16 +297,15 @@ class CarRacingDataModule(pl.LightningDataModule):
         self.data_val = None
         self.seed = seed
         self.stats = stats
-        self.states = states
+
 
     def setup(self, name: str = None):
         # ----- CarRacingDataset is a Dataloader file, takes care of normalization and such-----
-        if self.stats and self.states:
+        if self.stats:
             self.data_full = CarRacingDataset_forInference(  dataset_path= os.path.join(self.data_dir, name),
                                             pred_horizon=self.T_pred,
                                             obs_horizon=self.T_obs,
-                                            stats=self.stats,
-                                            states=self.states
+                                            stats=self.stats
                                             )
         else: 
             self.data_full = CarRacingDataset(  dataset_path= os.path.join(self.data_dir, name),
@@ -297,9 +322,110 @@ class CarRacingDataModule(pl.LightningDataModule):
         return DataLoader(self.data_train, batch_size=self.batch_size, shuffle=True, num_workers=4)
 
     def val_dataloader(self):
-        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=False, num_workers=4)
+        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=True, num_workers=4)
     
     def save_stats(self, path):
         with open(path, 'wb') as f:
             pickle.dump([self.data_full.stats], f)
             
+
+
+
+# def create_sample_indices(
+#         episode_ends:np.ndarray, sequence_length:int,
+#         pad_before: int=0, pad_after: int=0):
+#     indices = list()
+#     for i in range(len(episode_ends)):
+#         start_idx = 0
+#         if i > 0:
+#             start_idx = episode_ends[i-1]
+#         end_idx = episode_ends[i]
+#         episode_length = end_idx - start_idx # All index in one episode
+
+#         min_start = -pad_before
+#         max_start = episode_length - sequence_length + pad_after
+
+#         # range stops one idx before end
+#         for idx in range(min_start, max_start+1):
+#             buffer_start_idx = max(idx, 0) + start_idx
+#             buffer_end_idx = min(idx+sequence_length, episode_length) + start_idx
+#             start_offset = buffer_start_idx - (idx+start_idx)
+#             end_offset = (idx+sequence_length+start_idx) - buffer_end_idx
+#             sample_start_idx = 0 + start_offset
+#             sample_end_idx = sequence_length - end_offset
+#             indices.append([
+#                 buffer_start_idx, buffer_end_idx,
+#                 sample_start_idx, sample_end_idx])
+#     indices = np.array(indices)
+#     return indices
+
+# def sample_sequence_array(train_data, sequence_length,
+#                     buffer_start_idx, buffer_end_idx,
+#                     sample_start_idx, sample_end_idx):
+#     input_array = train_data
+#     sample = input_array[buffer_start_idx:buffer_end_idx]
+#     data = sample
+#     if (sample_start_idx > 0) or (sample_end_idx < sequence_length):
+#         data = np.zeros(
+#             shape=(sequence_length,) + input_array.shape[1:],
+#             dtype=input_array.dtype)
+#         if sample_start_idx > 0:
+#             data[:sample_start_idx] = sample[0]
+#         if sample_end_idx < sequence_length:
+#             data[sample_end_idx:] = sample[-1]
+#         data[sample_start_idx:sample_end_idx] = sample
+#     result = data
+#     return result
+
+# def sample_sequence(train_data, sequence_length,
+#                     buffer_start_idx, buffer_end_idx,
+#                     sample_start_idx, sample_end_idx):
+#     result = dict()
+#     for key, input_arr in train_data.items():
+#         sample = input_arr[buffer_start_idx:buffer_end_idx]
+#         data = sample
+#         if (sample_start_idx > 0) or (sample_end_idx < sequence_length):
+#             data = np.zeros(
+#                 shape=(sequence_length,) + input_arr.shape[1:],
+#                 dtype=input_arr.dtype)
+#             if sample_start_idx > 0:
+#                 data[:sample_start_idx] = sample[0]
+#             if sample_end_idx < sequence_length:
+#                 data[sample_end_idx:] = sample[-1]
+#             data[sample_start_idx:sample_end_idx] = sample
+#         result[key] = data
+#     return result
+
+
+
+
+
+
+
+    # def _create_dataset(self, episode, ends, sequence_lenght, step_size):
+    #     dataset = []
+    #     prev_end = 0
+    #     # iterate over the ending indexes
+    #     for end in ends:
+    #         # calculate start indexes for current sub-signal
+    #         starts = np.arange(prev_end, end - sequence_lenght + 1, 1) # All starting points for the segments in the current episode
+    #         # take slices of sequence_lenght for current sub-signal, and append to dataset
+    #         for start in starts:
+    #             if start + sequence_lenght <= end:
+    #                 # create a segment directory
+    #                 segment = {}
+    #                 # add all data to the segment
+    #                 for key, value in episode.items():
+    #                     segment[key] = value[start:start + step_size*sequence_lenght:step_size]
+    #                 # append segment to dataset
+    #                 dataset.append(segment)
+    #         # update previous end
+    #         prev_end = end
+    #     return dataset # list of dicts each dict contains a segment of the episode with length sequence_lenght (ordered by time)
+    
+
+
+
+
+
+

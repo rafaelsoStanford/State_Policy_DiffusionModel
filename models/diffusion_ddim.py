@@ -26,12 +26,12 @@ class Diffusion_DDIM(Diffusion_DDPM):
         x_0 = x_0[0, ...].unsqueeze(0).unsqueeze(1)
         obs_cond = obs_cond[0, ...].unsqueeze(0).unsqueeze(1)
         
-        # Extract observations
-        position_observation = obs_cond.squeeze()[:, :2].detach().cpu().numpy()
-        actions_observation = obs_cond.squeeze()[:, 2:].detach().cpu().numpy()
+        # # Extract observations
+        # position_observation = obs_cond.squeeze()[:, :2].detach().cpu().numpy()
+        # actions_observation = obs_cond.squeeze()[:, 2:].detach().cpu().numpy()
         
-        positions_groundtruth = x_0.squeeze()[:, :2].detach().cpu().numpy()
-        actions_groundtruth = x_0.squeeze()[:, 2:].squeeze().detach().cpu().numpy()
+        # positions_groundtruth = x_0.squeeze()[:, :2].detach().cpu().numpy()
+        # actions_groundtruth = x_0.squeeze()[:, 2:].squeeze().detach().cpu().numpy()
         
         # Backward Process
         t_subset = torch.arange(0, self.noise_steps, step_size, device=self.device).long()
@@ -56,15 +56,7 @@ class Diffusion_DDIM(Diffusion_DDPM):
             x = self.add_constraints(x, x_0)
             sampling_history.append(x.squeeze().detach().cpu().numpy().copy())
             
-        print("Sampling finished.")
-        print("Sampling history length: ", len(sampling_history))
-    
-        plt_toVideo(self,
-                sampling_history,
-                positions_groundtruth = positions_groundtruth,
-                position_observation = position_observation,
-                actions_groundtruth = actions_groundtruth,
-                actions_observation = actions_observation)
+        return sampling_history
 
     # q(x_t | x_0)
     def q_forwardProcess(self, x_start, t, noise):
