@@ -186,8 +186,8 @@ class Diffusion_DDPM(pl.LightningModule):
                     x_t =  self.p_reverseProcess(obs_cond,  x_t,  t)
                     x_t = self.add_constraints(x_t, x_0)
                     sampling_history.append(x_t.squeeze().detach().cpu().numpy())
-            return sampling_history , x_0
-
+            return sampling_history
+        
     # q(x_t | x_0)
     def q_forwardProcess(self, x_start, t, noise):
         x_t = torch.sqrt(self.alphas_cumprod[t])[:,None,None,None] \

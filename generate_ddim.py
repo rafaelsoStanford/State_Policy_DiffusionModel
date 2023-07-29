@@ -16,7 +16,6 @@ def main():
     
     path_hyperparams = './tb_logs/version_590/hparams.yaml'
     path_checkpoint = './tb_logs/version_590/checkpoints/epoch=17.ckpt'
-    
     dataset_name = '2023-07-18-0031_dataset_1_episodes_2_modes.zarr.zip'
 
     model = Diffusion_DDIM.load_from_checkpoint( #Choose between DDPM and DDIM -- Model is inherited from DDPM thus they should be compatible
