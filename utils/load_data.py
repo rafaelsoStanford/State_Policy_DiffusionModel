@@ -75,9 +75,6 @@ def sample_sequence_sparse(data,  step_size,
         result[key] = sample
     return result
 
-
-
-
 # ================== Dataset loader for Traing and Validation ==================
 # Path: utils/load_data.py
 # Loading and normalizing data --> create dataset --> create dataloader --> save stats
@@ -111,7 +108,7 @@ class CarRacingDataset(torch.utils.data.Dataset):
         self.indices = create_sample_indices_sparse(
             ends=episode_ends,
             sequence_lenght=self.sequence_len,
-            step_size=25
+            step_size=10
             )
         
         self.stats = self._compute_stats(train_data, self.indices, self.obs_horizon, self.pred_horizon)
@@ -130,7 +127,6 @@ class CarRacingDataset(torch.utils.data.Dataset):
             'position': dataset_root['data']['position'][:],
             'velocity': dataset_root['data']['velocity'][:],
             'action': dataset_root['data']['action'][:],
-            'angle': dataset_root['data']['angle'][:],
         }
         episode_ends = dataset_root['meta']['episode_ends'][:]
 
@@ -156,7 +152,7 @@ class CarRacingDataset(torch.utils.data.Dataset):
                 data_array=train_data['position'],
                 sample_start_idx= buffer_start_idx,
                 sample_end_idx= buffer_end_idx,
-                step_size=25,
+                step_size=10,
             )
 
 
@@ -194,7 +190,7 @@ class CarRacingDataset(torch.utils.data.Dataset):
                 data=self.train_data,
                 sample_start_idx= buffer_start_idx,
                 sample_end_idx= buffer_end_idx,
-                step_size=25,
+                step_size=10,
             )
 
         # ? Modifications to the sample_sequence function
@@ -206,18 +202,20 @@ class CarRacingDataset(torch.utils.data.Dataset):
         #     sample_start_idx=sample_start_idx,
         #     sample_end_idx=sample_end_idx
         # )
+
         return self._normalize_sample(nsample)
 
 # =========== data set class for inference ===========
 # During Inferrence, we load the stats from the training data set
 # Small changes to the _create_dataset method
+
+
 class CarRacingDataset_forInference(CarRacingDataset):
     def __init__(self,
                  dataset_path: str,
                  pred_horizon: int,
                  obs_horizon: int,
-                 stats: dict,
-                 states: list
+                 stats: dict
                  ):
         
         self.obs_horizon = obs_horizon
@@ -225,18 +223,25 @@ class CarRacingDataset_forInference(CarRacingDataset):
         self.sequence_len = obs_horizon + pred_horizon # chunk length of data
         self.train_data = {}
         self.stats = stats
-        self.states = states
         self._create_dataset(dataset_path)
         
     def _create_dataset(self, dataset_path):
             train_image_data, train_data, episode_ends = self._load_data(dataset_path) 
 
-            self.indices = create_sample_indices(
-                episode_ends=episode_ends,
-                sequence_length=self.sequence_len,
-                pad_before=0,
-                pad_after=0
-            )
+            # self.indices = create_sample_indices(
+            #     episode_ends=episode_ends,
+            #     sequence_length=self.sequence_len,
+            #     pad_before=0,
+            #     pad_after=0
+            # )
+
+
+        #? Modifications to the indices
+            self.indices = create_sample_indices_sparse(
+                ends=episode_ends,
+                sequence_lenght=self.sequence_len,
+                step_size=10
+                )
             
             normalized_action_data, normalized_velocity_data = self._normalize_data(train_data)
             
@@ -244,10 +249,6 @@ class CarRacingDataset_forInference(CarRacingDataset):
             self.train_data['velocity'] = normalized_velocity_data
             self.train_data['action'] = normalized_action_data
             self.train_data['image'] = train_image_data
-            self.train_data['angle'] = train_data['angle']
-
-            self.train_data['states'] = self.states
-
 
 
     def _normalize_sample(self, nsample):
@@ -257,11 +258,35 @@ class CarRacingDataset_forInference(CarRacingDataset):
         nsample['position'] = nsample_centered / 2.0
         return nsample, translation_vec
 
+    
+    def __getitem__(self, idx):
+        buffer_start_idx, buffer_end_idx, sample_start_idx, sample_end_idx = self.indices[idx]
+
+        nsample = sample_sequence_sparse(
+                data=self.train_data,
+                sample_start_idx= buffer_start_idx,
+                sample_end_idx= buffer_end_idx,
+                step_size=10,
+            )
+
+        # ? Modifications to the sample_sequence function
+        # nsample = sample_sequence(
+        #     train_data=self.train_data,
+        #     sequence_length=self.sequence_len,
+        #     buffer_start_idx=buffer_start_idx,
+        #     buffer_end_idx=buffer_end_idx,
+        #     sample_start_idx=sample_start_idx,
+        #     sample_end_idx=sample_end_idx
+        # )
+        
+        sample , translation =  self._normalize_sample(nsample)
+        return sample , translation
+
 
 # ====== DataModule ====== #
 # ----- CarRacingDataModule is a Pytorch Lightning DataModule
 class CarRacingDataModule(pl.LightningDataModule):
-    def __init__(self, batch_size,  data_dir: str = "path/to/dir" , T_obs=4, T_pred=8 , seed=None, stats=None, states=None):
+    def __init__(self, batch_size,  data_dir: str = "path/to/dir" , T_obs=4, T_pred=8 , seed=None, stats=None):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
@@ -272,16 +297,15 @@ class CarRacingDataModule(pl.LightningDataModule):
         self.data_val = None
         self.seed = seed
         self.stats = stats
-        self.states = states
+
 
     def setup(self, name: str = None):
         # ----- CarRacingDataset is a Dataloader file, takes care of normalization and such-----
-        if self.stats and self.states:
+        if self.stats:
             self.data_full = CarRacingDataset_forInference(  dataset_path= os.path.join(self.data_dir, name),
                                             pred_horizon=self.T_pred,
                                             obs_horizon=self.T_obs,
-                                            stats=self.stats,
-                                            states=self.states
+                                            stats=self.stats
                                             )
         else: 
             self.data_full = CarRacingDataset(  dataset_path= os.path.join(self.data_dir, name),
@@ -298,7 +322,7 @@ class CarRacingDataModule(pl.LightningDataModule):
         return DataLoader(self.data_train, batch_size=self.batch_size, shuffle=True, num_workers=4)
 
     def val_dataloader(self):
-        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=False, num_workers=4)
+        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=True, num_workers=4)
     
     def save_stats(self, path):
         with open(path, 'wb') as f:
