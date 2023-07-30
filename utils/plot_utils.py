@@ -232,10 +232,17 @@ def plt_toVideo(self,
             plt.xlim(positions_groundtruth[:, 0].min(), positions_groundtruth[:, 0].max())
             plt.ylim(positions_groundtruth[:, 1].min(), positions_groundtruth[:, 1].max())
 
-        fig.animation = FuncAnimation(fig, animate, frames=len(sampling_history), interval=20, repeat=False)
-        fig.animation.save('./animations/' + self.date + 'animation_positions.gif', writer='pillow')
-        print("Animation saved")
-        plt.close('all')
+        fig.animation = FuncAnimation(fig, animate, frames=len(sampling_history), interval=20, repeat=False, blit=False)
+        # fig.animation.save('./animations/' + self.date + 'animation_positions.gif', writer='pillow')
+        # print("Animation saved")
+        # plt.close('all')
+
+        # Save the animation as an MP4 file
+        fig.animation.save('./animations/' + self.date + 'animation_positions.mp4', writer='ffmpeg', fps=30)
+
+        print("Positions animation saved")
+
+
 
     def plot_actions():
         fig2, ax1 = plt.subplots()
@@ -258,11 +265,12 @@ def plt_toVideo(self,
             plt.grid()
             plt.ylim(-1.5, 1.5)
 
-        fig2.animation = FuncAnimation(fig2, animate_actions, frames=len(sampling_history), interval=20, repeat=False)
-        fig2.animation.save('./animations/' + self.date + 'animation_actions.gif', writer='pillow')
-        print("Animation saved")
+        fig2.animation = FuncAnimation(fig2, animate_actions, frames=len(sampling_history), interval=20, repeat=False, blit=False)
+        
+        fig2.animation.save('./animations/' + self.date + 'animation_actions.mp4', writer='ffmpeg')
+
+        print("Actions animation saved")
         plt.close('all')
 
     plot_actions()
     plot_positions()
-# %%

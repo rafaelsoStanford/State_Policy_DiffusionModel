@@ -11,12 +11,14 @@ def main():
     batch_size = 1
 
     # =========== Load Model ===========
-    # ? path_hyperparams = './tb_logs/version_588/hparams.yaml'
-    # ? path_checkpoint = './tb_logs/version_588/checkpoints/epoch=55.ckpt'
-    
-    path_hyperparams = './tb_logs/version_590/hparams.yaml'
-    path_checkpoint = './tb_logs/version_590/checkpoints/epoch=17.ckpt'
-    dataset_name = '2023-07-18-0031_dataset_1_episodes_2_modes.zarr.zip'
+    path_hyperparams = './tb_logs/version_659/hparams.yaml'
+    path_checkpoint = './tb_logs/version_659/checkpoints/epoch=12.ckpt'
+    filepath = './tb_logs/version_659/STATS.pkl'
+    dataset_name = '2023-07-17-2252_dataset_1_episodes_2_modes.zarr.zip'
+    # Load the pickle file
+    with open(filepath, 'rb') as f:
+        stats = pickle.load(f)
+    stats = stats[0]
 
     model = Diffusion_DDIM.load_from_checkpoint( #Choose between DDPM and DDIM -- Model is inherited from DDPM thus they should be compatible
         path_checkpoint,
@@ -32,12 +34,18 @@ def main():
     # =========== Dataloader ===========
     # Dataset dir and filename
     dataset_dir = './data'
-    dataset = CarRacingDataModule( batch_size, dataset_dir, obs_horizon, pred_horizon ,seed=125)
+    dataset = CarRacingDataModule( batch_size, dataset_dir, obs_horizon, pred_horizon ,seed=125, stats=stats)
     dataset.setup( name = dataset_name )
     test_dataloaders = dataset.val_dataloader()
 
     batch = next(iter(test_dataloaders))
-    model.sample(batch=batch, step_size=50, ddpm_steps = 50)
+
+    sampling_history = model.sample(batch=batch[0], step_size=50, ddpm_steps = 50)
+
+        # =========== Save ===========
+    plt_toVideo(model,
+                sampling_history,
+                batch)
 
 if __name__ == "__main__":
     main()
