@@ -40,7 +40,7 @@ def main():
 
     batch = next(iter(test_dataloaders))
 
-    sampling_history = model.sample(batch=batch[0], step_size=50, ddpm_steps = 50)
+    sampling_history = model.sample(batch=batch[0], step_size=50)
 
         # =========== Save ===========
     plt_toVideo(model,

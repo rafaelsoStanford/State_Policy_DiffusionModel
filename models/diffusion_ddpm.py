@@ -9,6 +9,7 @@ from datetime import datetime
 # Loading modules
 from models.Unet_FiLmLayer import *
 from models.simple_Unet import * 
+from models.Unet_FiLmLayer_noAttention import *
 from models.encoder.autoencoder import *
 from utils.schedulers import *
 from utils.print_utils import *
@@ -28,6 +29,7 @@ class Diffusion_DDPM(pl.LightningModule):
                 , vision_encoder = None
                 , noise_scheduler = 'linear'
                 , inpaint_horizon = 10
+                , step_size = 1
                 ):
         super().__init__()
 
@@ -47,6 +49,9 @@ class Diffusion_DDPM(pl.LightningModule):
         if model == 'UNet_Film':
             print("Loading UNet with FiLm conditioning")
             self.model = UNet_Film
+        elif model == 'UNet_FilmnoAttention':
+            print("Loading UNet with FiLm conditioning, no attention Layers")
+            self.model = UNet_Film_noAttention
         else:
             print("Loading UNet (simple) ")
             self.model = UNet
@@ -108,7 +113,7 @@ class Diffusion_DDPM(pl.LightningModule):
 
 # ==================== Training ====================
     def training_step(self, batch, batch_idx):
-        loss = self.onepass(batch, batch_idx, mode="train")
+        loss = self.onepass(batch)
         self.log("train_loss",loss)
         self.log('lr', self.optimizers().param_groups[0]['lr'])
         return loss
@@ -129,7 +134,7 @@ class Diffusion_DDPM(pl.LightningModule):
                 obs_cond=obs_cond,
             )
             
-        loss = self.onepass(batch, batch_idx, mode="validation")
+        loss = self.onepass(batch)
         self.log("val_loss",loss,  sync_dist=True)
         return loss
 
@@ -146,7 +151,7 @@ class Diffusion_DDPM(pl.LightningModule):
         }
 
 # ==================== Noising / Denoising Processes ====================
-    def onepass(self, batch, batch_idx, mode="train"):
+    def onepass(self, batch):
         # ---------------- Preparing Observation / Prediction data ----------------
         x_0 , obs_cond = self.prepare_pred_cond_vectors(batch)
         x_0 = x_0.unsqueeze(1)
@@ -177,7 +182,7 @@ class Diffusion_DDPM(pl.LightningModule):
             x_0_predicted = self.p_reverseProcess_loop(x_cond = obs_cond, x_0 = x_0)
             return x_0_predicted , x_0, obs_cond
             
-        if mode == 'test':
+        if mode == 'sampling':
             sampling_history = []
             with torch.no_grad():
                 x_t = torch.rand(1, 1, self.pred_horizon + self.inpaint_horizon, self.prediction_dim, device=self.device)

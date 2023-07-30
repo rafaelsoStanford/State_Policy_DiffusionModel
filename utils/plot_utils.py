@@ -198,7 +198,8 @@ def plt_toTensorboard(self, pred,  obs_cond, x_0):
 
 def plt_toVideo(self, 
                 sampling_history,
-                batch):
+                batch,
+                saving_path,):
     
     position_observation    = batch[0]['position'].squeeze()[:self.obs_horizon].detach().cpu().numpy() #(20 , 2)
     positions_groundtruth   = batch[0]['position'].squeeze().detach().cpu().numpy() #(20 , 2)
@@ -238,7 +239,7 @@ def plt_toVideo(self,
         # plt.close('all')
 
         # Save the animation as an MP4 file
-        fig.animation.save('./animations/' + self.date + 'animation_positions.mp4', writer='ffmpeg', fps=30)
+        fig.animation.save(saving_path + '/' + self.date + 'animation_positions.mp4', writer='ffmpeg')
 
         print("Positions animation saved")
 
@@ -267,7 +268,7 @@ def plt_toVideo(self,
 
         fig2.animation = FuncAnimation(fig2, animate_actions, frames=len(sampling_history), interval=20, repeat=False, blit=False)
         
-        fig2.animation.save('./animations/' + self.date + 'animation_actions.mp4', writer='ffmpeg')
+        fig2.animation.save(saving_path + '/' + self.date + 'animation_actions.mp4', writer='ffmpeg')
 
         print("Actions animation saved")
         plt.close('all')

@@ -1,10 +1,3 @@
-
-import pytorch_lightning as pl
-from torch.utils.data import DataLoader, random_split
-from pytorch_lightning import loggers as pl_loggers
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging, ModelCheckpoint
-
 from models.diffusion_ddpm import *
 from models.diffusion_ddim import *
 from utils.load_data import *
@@ -31,6 +24,7 @@ def main():
     # path_checkpoint = './tb_logs/version_643/checkpoints/epoch=32.ckpt'
     # filepath = './tb_logs/version_643/STATS.pkl'
     # dataset_name = '2023-07-17-2252_dataset_1_episodes_2_modes.zarr.zip'
+
     path_hyperparams = './tb_logs/version_659/hparams.yaml'
     path_checkpoint = './tb_logs/version_659/checkpoints/epoch=12.ckpt'
     filepath = './tb_logs/version_659/STATS.pkl'

@@ -4,7 +4,7 @@ import os
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging, ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint
 
 from models.diffusion_ddpm import *
 from utils.load_data import *
@@ -22,6 +22,7 @@ def parse_arguments():
     parser.add_argument('--pred_horizon', type=int, default=40, help='Prediction horizon')
     parser.add_argument('--action_horizon', type=int, default=1, help='Action horizon')
     parser.add_argument('--inpaint_horizon', type=int, default= 20, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
+    parser.add_argument('--step_size', type=int, default=10, help='Rate of sampling from the dataset')
     parser.add_argument('--noise_steps', type=int, default=1000, help='Denoising steps')
     
     parser.add_argument('--cond_dim', type=int, default=128+2+3+2, help='Dimension of diffusion input state')
@@ -38,7 +39,6 @@ def parse_arguments():
 #========== MAIN ===========
 ############################
 def main(args):
-
     # ===========Parameters===========
     # training parameters
     n_epochs = args.n_epochs
@@ -54,6 +54,7 @@ def main(args):
     action_horizon = args.action_horizon
     cond_dim = args.cond_dim
     output_dim = args.output_dim
+    step_size = args.step_size
 
     # Dataset dir and filename
     dataset_dir = args.dataset_dir
@@ -66,7 +67,7 @@ def main(args):
     
     # =========== Loading Data ===========
     # Load Dataset using Pytorch Lightning DataModule
-    dataset = CarRacingDataModule(batch_size, dataset_dir , obs_horizon, pred_horizon ,action_horizon, stats=None)
+    dataset = CarRacingDataModule(batch_size, dataset_dir , obs_horizon, pred_horizon ,action_horizon, step_size=step_size)
     
     dataset.setup(name=dataset_name)
     train_dataloader = dataset.train_dataloader()
@@ -84,6 +85,7 @@ def main(args):
                     learning_rate=lr,
                     inpaint_horizon=inpaint_horizon,
                     noise_scheduler=noise_scheduler,
+                    step_size=step_size,
     )
     
     # ===========trainer===========

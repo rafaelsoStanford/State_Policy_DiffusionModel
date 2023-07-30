@@ -20,25 +20,36 @@ class Diffusion_DDIM(Diffusion_DDPM):
     Thus we only overwrite the generation process (sample function).
     """
 # ==================== Sampling ====================
-    def sample(self, batch,  step_size = 20, ddpm_steps = 100):
-        # Prepare Data
+    def sample(self, batch,  step_size = 20, ddpm_steps = None):
+        
+        """
+        Generate a sample from the model using DDIM. Training is not required, as a trained noise estimator from DDPM can be used, without any modification.
+
+        Parameters
+        ----------
+        batch : torch.Tensor
+            Batch of observations.
+        step_size : int, optional
+            Number of steps between each sample. The default is 20.
+        ddpm_steps : int, optional  
+            Number of steps to run the DDPM process. The default is None. If not None, the DDIM process is run first, then the DDPM process.
+            This can be considered a hybrid between DDIM and DDPM.
+
+        Returns:
+        --------
+        sampling_history : list
+            List of all denoising steps of the Markov chain.
+        """
+        
         x_0, obs_cond = self.prepare_pred_cond_vectors(batch)
         x_0 = x_0[0, ...].unsqueeze(0).unsqueeze(1)
         obs_cond = obs_cond[0, ...].unsqueeze(0).unsqueeze(1)
-        
-        # # Extract observations
-        # position_observation = obs_cond.squeeze()[:, :2].detach().cpu().numpy()
-        # actions_observation = obs_cond.squeeze()[:, 2:].detach().cpu().numpy()
-        
-        # positions_groundtruth = x_0.squeeze()[:, :2].detach().cpu().numpy()
-        # actions_groundtruth = x_0.squeeze()[:, 2:].squeeze().detach().cpu().numpy()
-        
-        # Backward Process
+
+        # Sampling
         t_subset = torch.arange(0, self.noise_steps, step_size, device=self.device).long()
         x = torch.randn_like(x_0)
         t = t_subset[-1]
         sampling_history = [x.squeeze().detach().cpu().numpy()]
-
         for t_next in reversed(t_subset[:-1]):
             a_t = self.alphas_cumprod[t]
             a_tnext = self.alphas_cumprod[t_next]
@@ -51,11 +62,11 @@ class Diffusion_DDIM(Diffusion_DDPM):
             sampling_history.append(x.squeeze().detach().cpu().numpy().copy())
             t = t_next
         
-        for t in reversed(range(0, ddpm_steps)):
-            x = self.p_reverseProcess(obs_cond, x, t)
-            x = self.add_constraints(x, x_0)
-            sampling_history.append(x.squeeze().detach().cpu().numpy().copy())
-            
+        if ddpm_steps is not None:
+            for t in reversed(range(0, ddpm_steps)):
+                x = self.p_reverseProcess(obs_cond, x, t)
+                x = self.add_constraints(x, x_0)
+                sampling_history.append(x.squeeze().detach().cpu().numpy().copy())
         return sampling_history
 
     # q(x_t | x_0)
