@@ -27,12 +27,14 @@ def main():
 
     # =========== Load Model ===========
     # =========== Load Model ===========
-    path_hyperparams = './tb_logs/version_643/hparams.yaml'
-    path_checkpoint = './tb_logs/version_643/checkpoints/epoch=32.ckpt'
-    filepath = './tb_logs/version_643/STATS.pkl'
-    #dataset_name = '2023-07-15-1711_dataset_1_episodes_2_modes.zarr.zip'
+    # path_hyperparams = './tb_logs/version_643/hparams.yaml'
+    # path_checkpoint = './tb_logs/version_643/checkpoints/epoch=32.ckpt'
+    # filepath = './tb_logs/version_643/STATS.pkl'
+    # dataset_name = '2023-07-17-2252_dataset_1_episodes_2_modes.zarr.zip'
+    path_hyperparams = './tb_logs/version_657/hparams.yaml'
+    path_checkpoint = './tb_logs/version_657/checkpoints/epoch=35.ckpt'
+    filepath = './tb_logs/version_657/STATS.pkl'
     dataset_name = '2023-07-17-2252_dataset_1_episodes_2_modes.zarr.zip'
-
     # Load the pickle file
     with open(filepath, 'rb') as f:
         stats = pickle.load(f)

@@ -18,10 +18,10 @@ def parse_arguments():
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
 
-    parser.add_argument('--obs_horizon', type=int, default=30, help='Observation horizon')
-    parser.add_argument('--pred_horizon', type=int, default=30, help='Prediction horizon')
+    parser.add_argument('--obs_horizon', type=int, default=20, help='Observation horizon')
+    parser.add_argument('--pred_horizon', type=int, default=40, help='Prediction horizon')
     parser.add_argument('--action_horizon', type=int, default=1, help='Action horizon')
-    parser.add_argument('--inpaint_horizon', type=int, default= 10, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
+    parser.add_argument('--inpaint_horizon', type=int, default= 20, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
     parser.add_argument('--noise_steps', type=int, default=1000, help='Denoising steps')
     
     parser.add_argument('--cond_dim', type=int, default=128+2+3+2, help='Dimension of diffusion input state')
@@ -66,7 +66,7 @@ def main(args):
     
     # =========== Loading Data ===========
     # Load Dataset using Pytorch Lightning DataModule
-    dataset = CarRacingDataModule(batch_size, dataset_dir , obs_horizon, pred_horizon ,action_horizon)
+    dataset = CarRacingDataModule(batch_size, dataset_dir , obs_horizon, pred_horizon ,action_horizon, stats=None)
     
     dataset.setup(name=dataset_name)
     train_dataloader = dataset.train_dataloader()
@@ -89,10 +89,7 @@ def main(args):
     # ===========trainer===========
     # -----PL configs-----
     tensorboard = pl_loggers.TensorBoardLogger(save_dir=tb_dir ,name='',flush_secs=1)
-    
-    
-    
-    early_stop_callback = EarlyStopping(monitor='lr', stopping_threshold=2e-6, patience=n_epochs)   
+    early_stop_callback = EarlyStopping(monitor='lr', stopping_threshold=1e-4, patience=n_epochs//10, verbose=True)   
     checkpoint_callback = ModelCheckpoint(filename="{epoch}",     # Checkpoint filename format
                                           save_top_k=-1,          # Save all checkpoints
                                           every_n_epochs=1,               # Save every epoch
@@ -105,6 +102,14 @@ def main(args):
                          callbacks=[early_stop_callback, checkpoint_callback],
                          logger=tensorboard, profiler="simple", val_check_interval=0.25, 
                          accumulate_grad_batches=1, gradient_clip_val=0.5) 
+
+    FPS = 50
+    print(" Further Info: Observation Horizon: {}, Prediction Horizon: {}, Inpaint Horizon: {}".format(obs_horizon, pred_horizon, inpaint_horizon))
+    print(" Step size: {}".format(dataset.data_full.step_size))
+    print(" In Seconds: Observation Horizon {} s".format(dataset.data_full.step_size*obs_horizon*1/FPS))
+    print(" In Seconds: Prediction Horizon {} s".format(dataset.data_full.step_size*pred_horizon*1/FPS))
+    print(" In Seconds: Inpaint Horizon {} s".format(dataset.data_full.step_size*inpaint_horizon*1/FPS))
+    
 
     # -----print model info------
     if os.getenv("LOCAL_RANK", '0') == '0':
