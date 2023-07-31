@@ -31,7 +31,7 @@ def parse_arguments():
     parser.add_argument('--noise_scheduler', type=str, default='linear', help='String for choosing noise scheduler')
 
     parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
-    parser.add_argument('--dataset', type=str, default='2023-07-16-2348_dataset_10_episodes_2_modes.zarr.zip', help='zarr.zip dataset filename')
+    parser.add_argument('--dataset', type=str, default='2023-07-30-1836_dataset_20_episodes_2_modes.zarr.zip', help='zarr.zip dataset filename')
     
     return parser.parse_args()
 
@@ -119,6 +119,7 @@ def main(args):
 
     # -----save stats------
     trainer.validate(model= diffusion, dataloaders=valid_dataloader)
+    
     tb_new_dir = tensorboard.log_dir  #.validate() had to be called before, otherwise tb_new_dir is not yet created
     dataset.save_stats( tb_new_dir + "/STATS.pkl")
     
