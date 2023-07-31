@@ -28,10 +28,7 @@ step_size = 10
 
 # Fix the seed for reproducibility
 np.random.seed(SEED)
-def fetch_hyperparams_from_yaml(file_path):
-    with open(file_path, 'r') as file:
-        hyperparams = yaml.safe_load(file)
-    return hyperparams
+
 
 def normalize_position(sample, stats):
     sample_normalized = normalize_data(sample, stats['position'])
