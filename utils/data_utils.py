@@ -25,6 +25,13 @@ def unnormalize_data(ndata, stats):
     data = ndata * (stats['max'] - stats['min']) + stats['min']
     return data
 
+def unnormalize_position(nSample, translation_vec, position_stats):
+    nSample = np.array(nSample)
+    sample_unnormalized = nSample * 2.0 + translation_vec
+    sample_unnormalized  = unnormalize_data(sample_unnormalized, position_stats)
+    nSample = sample_unnormalized
+    return nSample
+
 def save_stats(stats, save_path):
     with open(save_path, 'wb') as f:
         pickle.dump(stats, f)

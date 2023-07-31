@@ -88,6 +88,9 @@ class CarRacingDataset(torch.utils.data.Dataset):
         nsample['position'] = (sample_normalized - translation_vec) / 2.0
         return nsample
 
+    
+
+
     def __getitem__(self, idx):
         start_idx, end_idx, _ , _ = self.indices[idx]
         sample = sample_sequence_sparse(

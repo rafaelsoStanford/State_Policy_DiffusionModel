@@ -18,11 +18,11 @@ def parse_arguments():
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
 
-    parser.add_argument('--obs_horizon', type=int, default=20, help='Observation horizon')
-    parser.add_argument('--pred_horizon', type=int, default=40, help='Prediction horizon')
+    parser.add_argument('--obs_horizon', type=int, default=10, help='Observation horizon')
+    parser.add_argument('--pred_horizon', type=int, default=10, help='Prediction horizon')
     parser.add_argument('--action_horizon', type=int, default=1, help='Action horizon')
-    parser.add_argument('--inpaint_horizon', type=int, default= 20, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
-    parser.add_argument('--step_size', type=int, default=10, help='Rate of sampling from the dataset')
+    parser.add_argument('--inpaint_horizon', type=int, default= 10, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
+    parser.add_argument('--step_size', type=int, default=10, help='Rate of sampling from the dataset') # 10 equal to 0.2s
     parser.add_argument('--noise_steps', type=int, default=1000, help='Denoising steps')
     
     parser.add_argument('--cond_dim', type=int, default=128+2+3+2, help='Dimension of diffusion input state')
