@@ -88,9 +88,6 @@ class CarRacingDataset(torch.utils.data.Dataset):
         nsample['position'] = (sample_normalized - translation_vec) / 2.0
         return nsample
 
-    
-
-
     def __getitem__(self, idx):
         start_idx, end_idx, _ , _ = self.indices[idx]
         sample = sample_sequence_sparse(
@@ -133,6 +130,18 @@ class CarRacingDatasetForInference(CarRacingDataset):
         nsample_centered = sample_normalized - translation_vec
         nsample['position'] = nsample_centered / 2.0
         return nsample, translation_vec
+    
+    def __getitem__(self, idx):
+        start_idx, end_idx, _ , _ = self.indices[idx]
+        sample = sample_sequence_sparse(
+                data=self.train_data,
+                sample_start_idx= start_idx,
+                sample_end_idx= end_idx,
+                step_size=self.step_size
+            )
+        nsample, translation =  self._normalize_position(sample)
+        return nsample, translation, start_idx, end_idx
+
 
 class CarRacingDataModule(pl.LightningDataModule):
     def __init__(self, batch_size: int, data_dir: str = "path/to/dir", T_obs=4, T_pred=8, seed=None, stats=None, step_size: int = 5):
@@ -165,7 +174,7 @@ class CarRacingDataModule(pl.LightningDataModule):
         return DataLoader(self.data_train, batch_size=self.batch_size, shuffle=True, num_workers=4)
 
     def val_dataloader(self):
-        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=False, num_workers=4)
+        return DataLoader(self.data_val, batch_size=self.batch_size, shuffle=False, num_workers=1)
 
     def save_stats(self, path):
         with open(path, 'wb') as f:

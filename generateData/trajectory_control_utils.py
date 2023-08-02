@@ -161,7 +161,7 @@ def append_to_histories(observation, velocity, position, action, angle, img_hist
     angle_hist.append(angle)
 
 def save_data_to_buffer(buffer, img_hist, act_hist, vel_hist, pos_hist, angle_hist):
-    img_hist = np.array(img_hist, dtype=np.float32)
+    img_hist = np.array(img_hist)
     act_hist = np.array(act_hist, dtype=np.float32)
     vel_hist = np.array(vel_hist, dtype=np.float32)
     pos_hist = np.array(pos_hist, dtype=np.float32)

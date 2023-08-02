@@ -24,7 +24,7 @@ max_steps = 2000
 def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
     # ======================  START RUN  ====================== #
     print("*"*10 +" Starting run...: Current Mode: ", MODE, "*"*10)
-    seeds =   np.random.randint(43, 500, size=NUM_EPISODES) # [42] #
+    seeds = np.random.randint(43, 500, size=NUM_EPISODES) # [42] #
     for episode in range(NUM_EPISODES):   
         print("*"*10 +" Starting episode: ", episode, "*"*10)
         # -----  Initialize buffers ----- #
@@ -108,7 +108,7 @@ def generate_data(args):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Generate Data")
-    parser.add_argument("--num_episodes_per_mode", type=int, default=20, help="Number of episodes per mode")
+    parser.add_argument("--num_episodes_per_mode", type=int, default=1, help="Number of episodes per mode")
     parser.add_argument("--chunk_len", type=int, default=-1, help="Chunk length")
     parser.add_argument("--dataset_name", type=str, default=None, help="Dataset name")
     parser.add_argument("--base_dir", type=str, default="./data/", help="Base directory")

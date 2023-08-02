@@ -19,9 +19,10 @@ def load_model(model_name, checkpoint_path, hparams_path):
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', type=str, default='DDPM', help="Can be 'DDPM', 'DDIM', or 'DDIPM'")
-    parser.add_argument('--version', type=str, default='659', help='Version control variable')
+    parser.add_argument('--model_name', type=str, default='DDIM', help="Can be 'DDPM', 'DDIM', or 'DDIPM'")
+    parser.add_argument('--version', type=str, default='669', help='Version control variable')
     parser.add_argument('--checkpoint_epoch', type=str, default='12', help='Checkpoint epoch')
+    
     parser.add_argument('--stats_file_name', type=str, default='STATS.pkl', help='Stats file name')
     parser.add_argument('--dataset_dir', type=str, default='./data', help='Directory of the dataset')
     parser.add_argument('--dataset_name', type=str, default='2023-07-17-2252_dataset_1_episodes_2_modes.zarr.zip', help='Name of the dataset')
@@ -29,6 +30,7 @@ def parse_arguments():
     parser.add_argument('--seed', type=int, default=125, help='Random seed')
     args = parser.parse_args()
     return args
+
 
 def main():
     args = parse_arguments()
@@ -62,7 +64,7 @@ def main():
     elif args.model_name == 'DDIM':
         sampling_history = model.sample(batch=batch[0], mode='sampling', step_size=50)
     elif args.model_name == 'DDIPM':
-        sampling_history = model.sample(batch=batch[0], mode='sampling', step_size=50, ddpm_steps=100)
+        sampling_history = model.sample(batch=batch[0], mode='sampling', step_size=20, ddpm_steps=100)
     end = time.time()
     print("     ... Sampling complete! ***")
     print(f'*** Time taken for sampling: {end-start} ***')

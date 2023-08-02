@@ -15,7 +15,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Training script')
     parser.add_argument('--n_epochs', type=int, default=500, help='Number of epochs')
     parser.add_argument('--amp', action='store_true', help='Enable Automatic Mixed Precision (AMP)')
-    parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
+    parser.add_argument('--batch_size', type=int, default=4, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
 
     parser.add_argument('--obs_horizon', type=int, default=10, help='Observation horizon')

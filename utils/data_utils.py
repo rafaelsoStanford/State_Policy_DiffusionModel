@@ -25,6 +25,13 @@ def unnormalize_data(ndata, stats):
     data = ndata * (stats['max'] - stats['min']) + stats['min']
     return data
 
+def normalize_position(sample, position_stats):
+    sample_normalized = normalize_data(sample, position_stats)
+    translation_vec = sample_normalized[0, :] # center sample at origin
+    nsample_centered = sample_normalized - translation_vec
+    nsample = nsample_centered / 2.0
+    return nsample, translation_vec
+
 def unnormalize_position(nSample, translation_vec, position_stats):
     nSample = np.array(nSample)
     sample_unnormalized = nSample * 2.0 + translation_vec
