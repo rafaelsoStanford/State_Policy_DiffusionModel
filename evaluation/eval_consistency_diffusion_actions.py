@@ -32,9 +32,9 @@ def interpolate_actions(current_action, next_action, steps):
 dataset_path = './evaluation/data/'
 dataset_name = 'Evaluation_dataset_1_episodes_1_modes.zarr.zip'
 
-filepath = './tb_logs/version_674/STATS.pkl'
-path_checkpoint = './tb_logs/version_674/checkpoints/epoch=10.ckpt'
-path_hyperparams = './tb_logs/version_674/hparams.yaml'
+filepath = './tb_logs/version_671/STATS.pkl'
+path_checkpoint = './tb_logs/version_671/checkpoints/epoch=10.ckpt'
+path_hyperparams = './tb_logs/version_671/hparams.yaml'
 
 
 print("*** Loading Data ...")
@@ -232,6 +232,8 @@ plt.title(f'Comparison of Ground Truth Trajectory and Predicted Rollouts\n'
           f'Obs Horizon: {obs_horizon}, Pred Horizon: {pred_horizon}\n'
           f'Inpaint Horizon: {inpaint_horizon}, Step Size: {step_size}')
 
+plt.axis('scaled')
+
 plt.show()
 
 
@@ -260,6 +262,45 @@ plt.xlabel('Time (s)')  # labeling x-axis as time
 plt.title(f'Comparison of Ground Truth Action and Predicted Actions\n'
           f'Obs Horizon: {obs_horizon}, Pred Horizon: {pred_horizon}\n'
           f'Inpaint Horizon: {inpaint_horizon}, Step Size: {step_size}')
+plt.show()
+
+
+# Initialize a list to store all errors for averaging
+all_errors = []
+
+# Initialize a figure for the error plot
+fig_error, ax_error = plt.subplots()
+
+# Loop over each predicted position trajectory
+for i in range(len(trajectory_list)):
+    # Calculate the Euclidean distance between the predicted positions and the ground truth positions
+    error = np.sqrt(np.sum((np.array(trajectory_list[i])[::step_size, :2] - data['position'][start_idx + inpaint_horizon*step_size :start_idx + ((obs_horizon+pred_horizon) * step_size):step_size, :2])**2, axis=1))
+    # Store the error
+    all_errors.append(error)
+    # Plot the error over time in red and slightly transparent, only label the first one
+    if i == 0:
+        ax_error.plot(time_vector[:len(error)], error, color='r', alpha=0.5, label=f'Run 1 to {len(trajectory_list)}')
+    else:
+        ax_error.plot(time_vector[:len(error)], error, color='r', alpha=0.5)
+
+# Calculate the average error
+average_error = np.mean(np.array(all_errors), axis=0)
+# Calculate the standard deviation
+std_dev = np.std(np.array(all_errors), axis=0)
+
+# Plot the average error over time in blue, bold
+ax_error.plot(time_vector[:len(average_error)], average_error, color='b', linewidth=2, label='Average Error')
+
+# Fill the region within one standard deviation of the average error
+ax_error.fill_between(time_vector[:len(average_error)], average_error - std_dev, average_error + std_dev, color='b', alpha=0.1)
+
+# Formatting the plot
+ax_error.set_xlabel('Time (s)')
+ax_error.set_ylabel('Error (Euclidean Distance)')
+ax_error.set_title(f'Average Error of Predicted Action Rollout Sequences over Time compared to ground truth\n'
+                    f'Obs Horizon: {obs_horizon}, Pred Horizon: {pred_horizon}, Step Size: {step_size}')
+ax_error.legend()
+
 plt.show()
 
 

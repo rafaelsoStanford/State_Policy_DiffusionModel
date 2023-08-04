@@ -25,7 +25,7 @@ def load_model(model_name, checkpoint_path, hparams_path):
     model.eval()
     return model
 
-def plot_predictions(position_prediction_history, position_groundtruth, obs_horizon, pred_horizon, step_size):
+def plot_predictions(position_prediction_history, position_groundtruth, obs_horizon,  pred_horizon, step_size, inpaint_horizon = 0):
     """Plots the position predictions"""
     fig, ax = plt.subplots()
     for i in range(len(position_prediction_history)):
@@ -35,7 +35,55 @@ def plot_predictions(position_prediction_history, position_groundtruth, obs_hori
     plt.plot(position_groundtruth[0, :obs_horizon, 0], position_groundtruth[0, :obs_horizon, 1], 'o', color='red')
     plt.title('Diffusion position predicitons, with ' + MODEL_NAME + ' model, \n Horizons: ' + str(obs_horizon) + ' obs, ' + str(pred_horizon) + ' pred, Step size: ' + str(step_size*1/50) + ' seconds')
     # Equal aspect ratio
-    ax.set_aspect('equal', 'box')
+    # ax.set_aspect('equal', 'box')
+    plt.axis('scaled')
+
+    plt.show()
+
+
+    # Initialize a figure for the error plot
+    fig_error, ax_error = plt.subplots()
+
+    # Initialize a list to store all errors for averaging
+    all_errors = []
+
+    flag = False
+
+    # Loop over each predicted trajectory
+    for i in range(len(position_prediction_history)):
+        # Calculate the Euclidean distance between the predicted points and the ground truth
+        error = np.sqrt(np.sum((position_prediction_history[i][inpaint_horizon:] - position_groundtruth[0, inpaint_horizon:, :2])**2, axis=1))
+        # Store the error
+        all_errors.append(error)
+        # Plot the error over time in red and slightly transparent, only label the first one
+        if flag is False:
+            ax_error.plot(np.arange(len(error))*step_size / 50.0, error, color='r', alpha=0.5, label=f'Run 1 to {len(position_prediction_history)}')
+            flag = True
+        else:
+            ax_error.plot(np.arange(len(error))*step_size / 50.0, error, color='r', alpha=0.5)
+
+    # Convert all errors to a numpy array for ease of calculation
+    all_errors = np.array(all_errors)
+
+    # Calculate the average error
+    average_error = np.mean(all_errors, axis=0)
+
+    # Calculate the standard deviation of error
+    std_error = np.std(all_errors, axis=0)
+
+    # Plot the average error over time in blue, bold
+    ax_error.plot(np.arange(len(average_error))*step_size / 50.0, average_error, color='b', linewidth=2, label='Average Error')
+
+    # Fill the area between the average plus standard deviation and the average minus standard deviation
+    ax_error.fill_between(np.arange(len(average_error))*step_size / 50.0, average_error - std_error, average_error + std_error, color='b', alpha=0.2)
+
+    # Formatting the plot
+    ax_error.set_xlabel('Time (s)')
+    ax_error.set_ylabel('Error (Euclidean Distance)')
+    ax_error.set_title(f'Average Error of Predicted Trajectories over Time\n'
+                        f'Obs Horizon: {obs_horizon}, Pred Horizon: {pred_horizon}, Step Size: {step_size*1/50} seconds')
+    ax_error.legend()
+
     plt.show()
 
 
@@ -54,9 +102,9 @@ DDPM_ADDITIONAL_STEPS = 200
 dataset_path = './evaluation/data/'
 dataset_name = 'EvaluationMiddle_dataset_1_episodes_1_modes.zarr.zip'
 
-stats_file_path = './tb_logs/version_674/STATS.pkl'
-checkpoint_path = './tb_logs/version_674/checkpoints/epoch=9.ckpt'
-hyperparams_path = './tb_logs/version_674/hparams.yaml'
+stats_file_path = './tb_logs/version_671/STATS.pkl'
+checkpoint_path = './tb_logs/version_671/checkpoints/epoch=9.ckpt'
+hyperparams_path = './tb_logs/version_671/hparams.yaml'
 
 # Load the stats from the file
 with open(stats_file_path, 'rb') as stats_file:
@@ -77,12 +125,6 @@ dataset = CarRacingDataModule(1 , dataset_path, obs_horizon, pred_horizon, seed=
 dataset.setup(name=dataset_name)
 test_dataloaders = dataset.val_dataloader()
 batch, translation, start_idx, end_idx = next(iter(test_dataloaders))
-
-image = batch['image'][0, obs_horizon, :, :, :].cpu().detach().numpy()
-image = np.transpose(image, (1, 2, 0))*255
-img = Image.fromarray(image.astype(np.uint8), "RGB")
-img.show()
-
 
 
 # Print hyperparameter information
@@ -115,7 +157,7 @@ for i in range(NUM_RUNS):
     position_prediction_history.append(position_pred.copy())
 
 # Plotting
-plot_predictions(position_prediction_history, position_groundtruth, obs_horizon, pred_horizon, step_size)
+plot_predictions(position_prediction_history, position_groundtruth, obs_horizon, pred_horizon, step_size, 10)
 
 
 
