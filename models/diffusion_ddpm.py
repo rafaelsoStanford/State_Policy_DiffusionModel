@@ -227,12 +227,13 @@ class Diffusion_DDPM(pl.LightningModule):
     # ==================== Helper functions ====================
     def prepare_pred_cond_vectors(self, batch):
         
-        normalized_img    =  batch['image'][:,:self.obs_horizon ,:].to(self.device) 
-        normalized_pos    =  batch['position'][:,:self.obs_horizon ,:].to(self.device) 
-        normalized_act    =  batch['action'][:,:self.obs_horizon,:].to(self.device) 
-        normalized_vel    =  batch['velocity'][:,:self.obs_horizon ,:].to(self.device) 
+        normalized_img    =  batch['image'][:,:self.obs_horizon ,:].float().to(self.device) 
+        normalized_pos    =  batch['position'][:,:self.obs_horizon ,:].float().to(self.device) 
+        normalized_act    =  batch['action'][:,:self.obs_horizon,:].float().to(self.device) 
+        normalized_vel    =  batch['velocity'][:,:self.obs_horizon ,:].float().to(self.device) 
 
         # ---------------- Encoding Image data ----------------
+
         encoded_img = self.vision_encoder(normalized_img.flatten(end_dim=1)) # (B, 128)
         image_features = encoded_img.reshape(*normalized_img.shape[:2],-1) # (B, t_0:t_obs , 128)
 
