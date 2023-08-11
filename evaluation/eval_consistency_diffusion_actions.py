@@ -233,7 +233,6 @@ plt.title(f'Comparison of Ground Truth Trajectory and Predicted Rollouts\n'
           f'Inpaint Horizon: {inpaint_horizon}, Step Size: {step_size}')
 
 plt.axis('scaled')
-
 plt.show()
 
 
