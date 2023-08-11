@@ -43,9 +43,8 @@ from Box2D.b2 import contactListener
 
 import gym
 from gym import spaces
-# from gym.envs.box2d.car_dynamics import Car
+from gym.envs.box2d.car_dynamics import Car
 # from envs.car_dynamics import Car
-from car_dynamics import Car
 from gym.utils import seeding, EzPickle
 
 import pyglet
@@ -153,7 +152,6 @@ class CarRacing(gym.Env, EzPickle):
         self.t4 = []
         self.t5 = []
 
-        self.pointsBuffer = []
         self.augmImageRender = None # Augmented rendering of state image. This is meant to generate track lines for different agents to follow.
 
         self.fd_tile = fixtureDef(
@@ -561,9 +559,6 @@ class CarRacing(gym.Env, EzPickle):
         gl.glViewport(0, 0, VP_W, VP_H)
         t.enable()  # sets projection
         self.render_road()
-        
-        self.render_pointsBuffer()
-
         for geom in self.viewer.onetime_geoms:
             geom.render()
         t.disable()
@@ -602,8 +597,7 @@ class CarRacing(gym.Env, EzPickle):
             self.viewer.close()
             self.viewer = None
 
-    def add_points2Buffer(self, pos_array: np.array):
-        self.pointsBuffer.append(pos_array, axis=0)
+
     
     def render_road(self, with_add_tracklines=False):
         colors = [0.4, 0.8, 0.4, 1.0] * 4
@@ -688,19 +682,6 @@ class CarRacing(gym.Env, EzPickle):
             pyglet.graphics.draw(1, GL_POINTS, ('v2f', (self.car.hull.position.x, self.car.hull.position.y)))
 
 
-    def render_pointsBuffer(self):
-        
-        if len(self.pointsBuffer) == 0:
-            return # nothing to render
-        
-        shape = self.pointsBuffer.shape
-
-        for l in range(shape[0]):
-            pyglet.gl.glColor3f(1, 0, 0)
-            pyglet.graphics.draw(len(self.pointsBuffer[l]), pyglet.gl.GL_LINE_STRIP,
-                                ('v2f', [v for point in self.pointsBuffer[l] for v in point]))
-
-        
 
             
 
