@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from envs.car_racing import CarRacing
 from utils.functions import *
 from utils.load_data import *
+from generateData.trajectory_control_utils import *
 from models.diffusion_ddpm import *
 
 import pickle
@@ -20,23 +21,62 @@ def load_pickle_file(file_path):
 
 
 
+# ==================================================================================================
+# Functions for running the environment
+# ==================================================================================================
+
+
+
+def prepare_diffusion_batch(img_buffer_obs, pos_buffer_obs, vel_buffer_obs, act_buffer_obs, stats):
+    
+    batch = {
+        'image': torch.tensor(list(img_buffer_obs), dtype=torch.float32),
+        'position': torch.tensor(list(pos_buffer_obs), dtype=torch.float32),
+        'velocity': torch.tensor(list(vel_buffer_obs), dtype=torch.float32),
+        'action': torch.tensor(list(act_buffer_obs), dtype=torch.float32),
+    }
+
+    normalized_image = batch['image'] / 255.0
+    normalized_image = normalized_image.permute(0, 3, 1, 2)  # Change image to pytorch format
+    normalized_action = normalize_data(batch['action'], stats['action'])
+    normalized_velocity = normalize_data(batch['velocity'], stats['velocity'])
+    normalized_position, position_translation = normalize_position(batch['position'], stats['position'])
+
+    normalized_batch = { 
+        'image': normalized_image.unsqueeze(0),
+        'position': normalized_position.unsqueeze(0),
+        'velocity': normalized_velocity.unsqueeze(0),
+        'action': normalized_action.unsqueeze(0),
+        'translation': position_translation.unsqueeze(0),
+    }
+    
+    return normalized_batch , batch , position_translation
+
+
+def get_initial_observation(obs, action,  info):
+    augmImg, carVelocity_wFrame, carPosition_wFrame, car_heading_angle, v_wFrame = extract_variables(info)
+
+    img = obs
+    position_vector = np.array([carPosition_wFrame[0], carPosition_wFrame[1]])
+    velocity_vector = np.array([carVelocity_wFrame[0], carVelocity_wFrame[1]])
+
+    return img, position_vector, velocity_vector, action
+
+# ==================================================================================================
+# ==================================================================================================
+# ==================================================================================================
+
 # Model paths
-filepath = './tb_logs/version_671/STATS.pkl'
-path_checkpoint = './tb_logs/version_671/checkpoints/epoch=10.ckpt'
-path_hyperparams = './tb_logs/version_671/hparams.yaml'
+filepath = './tb_logs/version_752/STATS.pkl'
+path_checkpoint = './tb_logs/version_752/checkpoints/epoch=10.ckpt'
+path_hyperparams = './tb_logs/version_752/hparams.yaml'
 
 # Fetch parameters
-model_params = fetch_hyperparams_from_yaml(path_hyperparams)
-obs_horizon = model_params['obs_horizon']
-pred_horizon = model_params['pred_horizon']
+model_params    = fetch_hyperparams_from_yaml(path_hyperparams)
+obs_horizon     = model_params['obs_horizon']
+pred_horizon    = model_params['pred_horizon']
 inpaint_horizon = model_params['inpaint_horizon']
-step_size = model_params['step_size']
-
-# Buffers for diffusion model
-img_buffer_obs = deque(maxlen=obs_horizon)
-pos_buffer_obs = deque(maxlen=obs_horizon)
-vel_buffer_obs = deque(maxlen=obs_horizon)
-act_buffer_obs = deque(maxlen=obs_horizon)
+step_size       = model_params['step_size']
 
 #Load ddpm model
 ddpm_model = Diffusion_DDPM.load_from_checkpoint(
@@ -48,7 +88,6 @@ ddpm_model.eval()
 # Load stats
 stats = load_pickle_file(filepath)
 
-
 # Environment parameters
 env = CarRacing()
 env.seed(42)
@@ -56,20 +95,79 @@ env.reset()
 action = np.array([0, 0, 0], dtype=np.float32)
 obs, _ , _, info = env.step(action) # Take a step to get the environment initialized (action is empty)
 
+# Buffers for diffusion model
+img_buffer_obs = deque(maxlen=obs_horizon)
+pos_buffer_obs = deque(maxlen=obs_horizon)
+vel_buffer_obs = deque(maxlen=obs_horizon)
+act_buffer_obs = deque(maxlen=obs_horizon)
+
+img, position_vector, velocity_vector, action = get_initial_observation(obs, action,  info)
+
+for i in range(obs_horizon): # Fill buffers with initial observation
+  img_buffer_obs.append(img)
+  pos_buffer_obs.append(position_vector)
+  vel_buffer_obs.append(velocity_vector)
+  act_buffer_obs.append(action)
+
+normalized_batch, batch, Translation = prepare_diffusion_batch(img_buffer_obs, pos_buffer_obs, vel_buffer_obs, act_buffer_obs, stats)
+
+# Initialize controller 
+velocity_error_buffer = deque(np.zeros(7), maxlen=7)
+steering_error_buffer = deque(np.zeros(10), maxlen=10)
+secondary_steering_error_buffer = deque(np.zeros(3), maxlen=3)
+
+#----- PID controllers ----- #
+velocity_pid_controller = PID(0.005, 0.001, 0.0005, setpoint=20)
+steering_pid_controller = PID(0.8, 0.01, 0.06, setpoint=0)
+
 env.render("human")
 
-while True:
+counter = 0
+while True:    
     
-    car_position = info['car_position_vector']
-    px = car_position.x
-    py = car_position.y
+    # Get environment variables
+    augmented_image, car_velocity, car_position, car_heading_angle, velocity_in_frame = extract_variables(info)
+    # Create Batch
+    img_buffer_obs.append(img)
+    pos_buffer_obs.append(car_position)
+    vel_buffer_obs.append(car_velocity)
+    act_buffer_obs.append(action)
+    normalized_batch, batch , Translation = prepare_diffusion_batch(img_buffer_obs, pos_buffer_obs, vel_buffer_obs, act_buffer_obs, stats)
+    # Prediction from diffusion model
+    if counter%50 == 0:
+      print("Predicting...")
+      time_start = time.time()
+      pred = ddpm_model.sample(normalized_batch, mode = "test")
+      time_end = time.time()
+      print("Done predicting. Result: {}    Elapsed Time: {}".format(pred.shape, time_end-time_start))
 
-    position_points = [px, py]
+      # Extract prediction
+      pred = pred[0].squeeze(0)
+      pred = pred[inpaint_horizon:]
+      pred = pred.cpu().detach().numpy()
+      Translation = Translation.cpu().detach().numpy()
+      # Unnormalize
+      pred = unnormalize_position(pred, Translation , stats['position'])
+      # Add point to buffer 
+      points = pred
+      env.add_points2Buffer(points)
+      # print("Extracted prediction. Result: {}".format(pred.shape))
 
-    env.add_points2Buffer( position_points )
-    action = np.array([0.1, 0.1, 0.0])
-    # Get observation
-    obs, _, done, info = env.step(action) # Step has to be called for the environment to continue
+
+    # Calculate action
+    calculated_action = trajectory_control(augmented_image, steering_pid_controller, velocity_pid_controller, 
+                steering_error_buffer, secondary_steering_error_buffer, velocity_error_buffer, velocity_in_frame, 'left')
+    
+    # Take a step in the environment
+    obs, reward, done, info = env.step(calculated_action)
+    # p1 = np.array([car_position[0], car_position[1]])
+    # p2 = np.array([car_position[0] + 0, car_position[1] + 10])
+    # position_vector = np.array([p1,p2])
+    # # Draw trajectory:
+    # env.add_points2Buffer(position_vector)
+
+    env.render("human")
+    counter += 1
 
 
 

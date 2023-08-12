@@ -173,6 +173,40 @@ class Diffusion_DDPM(pl.LightningModule):
     
 # ==================== Sampling ====================
     def sample(self, batch, mode, denoising_steps = 1000):
+
+
+        if mode == 'test':
+            """ 
+            Assuming batch only contains one sample, which only includes a set of observations
+            """
+            normalized_img    =  batch['image'].to(self.device) 
+            normalized_pos    =  batch['position'].to(self.device) 
+            normalized_act    =  batch['action'].to(self.device) 
+            normalized_vel    =  batch['velocity'].to(self.device) 
+
+            # ---------------- Encoding Image data ----------------
+            encoded_img = self.vision_encoder(normalized_img.flatten(end_dim=1)) # (B, 128)
+            image_features = encoded_img.reshape(*normalized_img.shape[:2],-1) # (B, t_0:t_obs , 128)
+
+
+            # ---------------- Prepare Condition Vector ----------------
+            obs_cond = torch.cat([normalized_pos, normalized_act,normalized_vel, image_features], dim=-1) # Shape (1, 1, obs_horizon, obs_dim)
+            
+
+            prediction_lenght = self.pred_horizon + self.inpaint_horizon # A vector of lenght of the prediction horizon + inpaint horizon
+            inpaint_start = self.obs_horizon-self.inpaint_horizon-1 # The start of the inpainting horizon
+            inpaint_end = self.obs_horizon-1 # The end of the inpainting horizon
+
+            x_noisy = torch.rand(1, 1, prediction_lenght , self.prediction_dim, device=self.device)
+
+            # ---------------- Backward Process ----------------
+            x_t = x_noisy
+            for t in reversed(range(0, denoising_steps)): # t ranges from denoising_steps-1 to 0
+                x_t[:, :, :self.obs_horizon, :] = normalized_pos
+                x_t =  self.p_reverseProcess(obs_cond,  x_t,  t)
+                x_t[:, :, :self.obs_horizon, :] = normalized_pos
+            return x_t
+        
         # ---------------- Prepare Data ----------------
         x_0 , obs_cond = self.prepare_pred_cond_vectors(batch)
         x_0 = x_0[0,...].unsqueeze(0).unsqueeze(1)
@@ -247,11 +281,11 @@ class Diffusion_DDPM(pl.LightningModule):
 
         # ---------------- Preparing Prediction data (acts as ground truth) ----------------
         x_0_pos = batch['position'][:,self.obs_horizon: ,:].to(self.device) # (B, t_obs:t_pred , 2)
-        x_0_act = batch['action'][:, self.obs_horizon: ,:].to(self.device) # (B, t_obs:t_pred, 3)
-        x_0 = torch.cat([x_0_pos, x_0_act], dim=-1) # (B, t_obs:t_pred, 5)
+        # x_0_act = batch['action'][:, self.obs_horizon: ,:].to(self.device) # (B, t_obs:t_pred, 3)
+        x_0 = x_0_pos # ! Only position is used as ground truth
 
         # Adding past obervation as inpainting condition
-        x_0 = torch.cat((obs_cond[:, -self.inpaint_horizon:, :5], x_0) , dim=1) # Concat in time dim
+        x_0 = torch.cat((obs_cond[:, -self.inpaint_horizon:, :2], x_0) , dim=1) # ! Only add position as inpainting condition
 
         # ---------------- Assert cond dimensions compatible with model (important when preloading / changing conditioning data) ----------------
         assert(obs_cond.shape[-1]*self.obs_horizon == self.noise_estimator.down1.cond_encoder[2].state_dict()['weight'].shape[1]) # Check if cond dim is correct
