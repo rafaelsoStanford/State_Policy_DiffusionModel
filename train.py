@@ -15,14 +15,14 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Training script')
     parser.add_argument('--n_epochs', type=int, default=500, help='Number of epochs')
     parser.add_argument('--amp', action='store_true', help='Enable Automatic Mixed Precision (AMP)')
-    parser.add_argument('--batch_size', type=int, default=4, help='Batch size')
+    parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
 
     parser.add_argument('--obs_horizon', type=int, default=10, help='Observation horizon')
-    parser.add_argument('--pred_horizon', type=int, default=10, help='Prediction horizon')
+    parser.add_argument('--pred_horizon', type=int, default=30, help='Prediction horizon')
     parser.add_argument('--action_horizon', type=int, default=1, help='Action horizon')
-    parser.add_argument('--inpaint_horizon', type=int, default= 10, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
-    parser.add_argument('--step_size', type=int, default=10, help='Rate of sampling from the dataset') # 10 equal to 0.2s
+    parser.add_argument('--inpaint_horizon', type=int, default= 1, help='Inpaining horizon, which denotes the amount of steps of our observations to use for inpainting')
+    parser.add_argument('--step_size', type=int, default=5, help='Rate of sampling from the dataset') # 10 equal to 0.2s
     parser.add_argument('--noise_steps', type=int, default=1000, help='Denoising steps')
     
     parser.add_argument('--cond_dim', type=int, default=128+2+3+2, help='Dimension of diffusion input state')
@@ -31,7 +31,8 @@ def parse_arguments():
     parser.add_argument('--noise_scheduler', type=str, default='linear', help='String for choosing noise scheduler')
 
     parser.add_argument('--dataset_dir', type=str, default='./data', help='Path to dataset directory')
-    parser.add_argument('--dataset', type=str, default='2023-07-30-1836_dataset_20_episodes_2_modes.zarr.zip', help='zarr.zip dataset filename')
+    # parser.add_argument('--dataset', type=str, default='2023-07-30-1836_dataset_20_episodes_2_modes.zarr.zip', help='zarr.zip dataset filename')
+    parser.add_argument('--dataset', type=str, default='2023-07-21-1131_dataset_1_episodes_2_modes.zarr.zip', help='zarr.zip dataset filename')
     
     return parser.parse_args()
 
@@ -100,7 +101,7 @@ def main(args):
 
     
     # -----train model-----
-    trainer = pl.Trainer(accelerator='gpu', devices=[0,1], precision=("16-mixed" if AMP else 32), max_epochs=n_epochs, 
+    trainer = pl.Trainer(accelerator='gpu', devices=[0], precision=("16-mixed" if AMP else 32), max_epochs=n_epochs, 
                          callbacks=[early_stop_callback, checkpoint_callback],
                          logger=tensorboard, profiler="simple", val_check_interval=0.25, 
                          accumulate_grad_batches=1, gradient_clip_val=0.5) 
