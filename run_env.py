@@ -27,13 +27,20 @@ def load_pickle_file(file_path):
 
 
 
-def prepare_diffusion_batch(img_buffer_obs, pos_buffer_obs, vel_buffer_obs, act_buffer_obs, stats):
+def prepare_diffusion_batch(img_buffer_obs, pos_buffer_obs, vel_buffer_obs, act_buffer_obs, stats, s=5):
     
+    # Use only every s-th entry from the buffers
+    img_buffer = list(img_buffer_obs)[::s]
+    pos_buffer = list(pos_buffer_obs)[::s]
+    vel_buffer = list(vel_buffer_obs)[::s]
+    act_buffer = list(act_buffer_obs)[::s]
+
+
     batch = {
-        'image': torch.tensor(list(img_buffer_obs), dtype=torch.float32),
-        'position': torch.tensor(list(pos_buffer_obs), dtype=torch.float32),
-        'velocity': torch.tensor(list(vel_buffer_obs), dtype=torch.float32),
-        'action': torch.tensor(list(act_buffer_obs), dtype=torch.float32),
+        'image': torch.tensor(list(img_buffer) , dtype=torch.float32),
+        'position': torch.tensor(list(pos_buffer), dtype=torch.float32),
+        'velocity': torch.tensor(list(vel_buffer) , dtype=torch.float32),
+        'action': torch.tensor(list(act_buffer) , dtype=torch.float32),
     }
 
     normalized_image = batch['image'] / 255.0
@@ -49,8 +56,9 @@ def prepare_diffusion_batch(img_buffer_obs, pos_buffer_obs, vel_buffer_obs, act_
         'action': normalized_action.unsqueeze(0),
         'translation': position_translation.unsqueeze(0),
     }
-    
-    return normalized_batch , batch , position_translation
+
+    return normalized_batch, batch , position_translation
+
 
 
 def get_initial_observation(obs, action,  info):
@@ -67,9 +75,9 @@ def get_initial_observation(obs, action,  info):
 # ==================================================================================================
 
 # Model paths
-filepath = './tb_logs/version_752/STATS.pkl'
-path_checkpoint = './tb_logs/version_752/checkpoints/epoch=10.ckpt'
-path_hyperparams = './tb_logs/version_752/hparams.yaml'
+filepath = './tb_logs/version_838/STATS.pkl'
+path_checkpoint = './tb_logs/version_838/checkpoints/epoch=3.ckpt'
+path_hyperparams = './tb_logs/version_838/hparams.yaml'
 
 # Fetch parameters
 model_params    = fetch_hyperparams_from_yaml(path_hyperparams)
@@ -78,12 +86,18 @@ pred_horizon    = model_params['pred_horizon']
 inpaint_horizon = model_params['inpaint_horizon']
 step_size       = model_params['step_size']
 
+
+device = torch.device("cuda")
+
 #Load ddpm model
 ddpm_model = Diffusion_DDPM.load_from_checkpoint(
     path_checkpoint,
     hparams_file=path_hyperparams,
+    map_location="cuda:0",
 )
+ddpm_model.to(device)
 ddpm_model.eval()
+
 
 # Load stats
 stats = load_pickle_file(filepath)
@@ -96,14 +110,14 @@ action = np.array([0, 0, 0], dtype=np.float32)
 obs, _ , _, info = env.step(action) # Take a step to get the environment initialized (action is empty)
 
 # Buffers for diffusion model
-img_buffer_obs = deque(maxlen=obs_horizon)
-pos_buffer_obs = deque(maxlen=obs_horizon)
-vel_buffer_obs = deque(maxlen=obs_horizon)
-act_buffer_obs = deque(maxlen=obs_horizon)
+img_buffer_obs = deque(maxlen=obs_horizon*step_size)
+pos_buffer_obs = deque(maxlen=obs_horizon*step_size)
+vel_buffer_obs = deque(maxlen=obs_horizon*step_size)
+act_buffer_obs = deque(maxlen=obs_horizon*step_size)
 
 img, position_vector, velocity_vector, action = get_initial_observation(obs, action,  info)
 
-for i in range(obs_horizon): # Fill buffers with initial observation
+for i in range(obs_horizon*step_size): # Fill buffers with initial observation
   img_buffer_obs.append(img)
   pos_buffer_obs.append(position_vector)
   vel_buffer_obs.append(velocity_vector)
@@ -137,12 +151,12 @@ while True:
     if counter%50 == 0:
       print("Predicting...")
       time_start = time.time()
-      pred = ddpm_model.sample(normalized_batch, mode = "test")
+      pred = ddpm_model.sample(normalized_batch)
       time_end = time.time()
       print("Done predicting. Result: {}    Elapsed Time: {}".format(pred.shape, time_end-time_start))
 
       # Extract prediction
-      pred = pred[0].squeeze(0)
+      pred = pred[0 , 0 , : , :2]
       pred = pred[inpaint_horizon:]
       pred = pred.cpu().detach().numpy()
       Translation = Translation.cpu().detach().numpy()
@@ -152,23 +166,29 @@ while True:
       points = pred
       env.add_points2Buffer(points)
       # print("Extracted prediction. Result: {}".format(pred.shape))
-
-
     # Calculate action
     calculated_action = trajectory_control(augmented_image, steering_pid_controller, velocity_pid_controller, 
                 steering_error_buffer, secondary_steering_error_buffer, velocity_error_buffer, velocity_in_frame, 'left')
     
     # Take a step in the environment
     obs, reward, done, info = env.step(calculated_action)
-    # p1 = np.array([car_position[0], car_position[1]])
-    # p2 = np.array([car_position[0] + 0, car_position[1] + 10])
-    # position_vector = np.array([p1,p2])
-    # # Draw trajectory:
-    # env.add_points2Buffer(position_vector)
-
     env.render("human")
-    counter += 1
+  
 
+    if counter%50 == 0:
+        position_gt = batch['position']
+        position_gt = position_gt.cpu().detach().numpy()
+
+        fig, ax = plt.subplots()
+        plt.plot(position_gt[:,0], position_gt[:,1], 'r', marker = '+', label = 'Ground Truth')
+        plt.plot(pred[:,0], pred[:,1], 'b', marker = 'o', label = 'Prediction')
+        ax.set_aspect('equal', 'box')
+        plt.grid()
+        plt.legend()
+        plt.show()
+        plt.close('all')
+
+    counter += 1
 
 
 
