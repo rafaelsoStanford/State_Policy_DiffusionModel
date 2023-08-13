@@ -376,7 +376,7 @@ class Diffusion_DDPM(pl.LightningModule):
         position_observation = observation_batch['position'].cpu().numpy() # (B, t_obs, 2)
         position_observation = position_observation[0] # (t_obs, 2)
 
-        positions_inpainted = inpaint_vector.squeeze().cpu().numpy() # (t_inpaint, 5)
+        positions_inpainted = inpaint_vector[0,0,...].cpu().numpy() # (t_inpaint, 5)
         positions_inpainted = positions_inpainted[:, :2] # (t_inpaint, 2)
 
         positions_groundtruth = batch['position'].cpu().numpy() # (B, t_pred, 2)
