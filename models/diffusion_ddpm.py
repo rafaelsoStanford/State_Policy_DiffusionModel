@@ -284,10 +284,10 @@ class Diffusion_DDPM(pl.LightningModule):
         """
         Prepares the observation batch for the model
         """
-        normalized_img    =  batch['image'][:,:self.obs_horizon ,:].to(self.device) 
-        normalized_pos    =  batch['position'][:,:self.obs_horizon ,:].to(self.device) 
-        normalized_act    =  batch['action'][:,:self.obs_horizon,:].to(self.device) 
-        normalized_vel    =  batch['velocity'][:,:self.obs_horizon ,:].to(self.device) 
+        normalized_img    =  batch['image'][:,:self.obs_horizon ,:].to(self.device).float()
+        normalized_pos    =  batch['position'][:,:self.obs_horizon ,:].to(self.device).float()
+        normalized_act    =  batch['action'][:,:self.obs_horizon,:].to(self.device).float()
+        normalized_vel    =  batch['velocity'][:,:self.obs_horizon ,:].to(self.device).float()
 
         observation_batch = {
             'image': normalized_img,
@@ -301,10 +301,10 @@ class Diffusion_DDPM(pl.LightningModule):
         """
         Prepares the prediction batch for the model
         """
-        normalized_img    =  batch['image'][:,self.obs_horizon: ,:].to(self.device) 
-        normalized_pos    =  batch['position'][:,self.obs_horizon: ,:].to(self.device) 
-        normalized_act    =  batch['action'][:,self.obs_horizon: ,:].to(self.device) 
-        normalized_vel    =  batch['velocity'][:,self.obs_horizon: ,:].to(self.device) 
+        normalized_img    =  batch['image'][:,self.obs_horizon: ,:].to(self.device).float()
+        normalized_pos    =  batch['position'][:,self.obs_horizon: ,:].to(self.device).float()
+        normalized_act    =  batch['action'][:,self.obs_horizon: ,:].to(self.device).float()
+        normalized_vel    =  batch['velocity'][:,self.obs_horizon: ,:].to(self.device).float()
 
         prediction_batch = {
             'image': normalized_img,
