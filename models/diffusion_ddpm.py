@@ -47,6 +47,9 @@ class Diffusion_DDPM(pl.LightningModule):
         self.prediction_dim = prediction_dim
         self.inpaint_horizon = inpaint_horizon
 
+
+        print("Using currently device: ", self.device)
+
     # --------------------- Model Architecture ---------------------
         if model == 'UNet_Film':
             print("Loading UNet with FiLm conditioning")
@@ -234,6 +237,9 @@ class Diffusion_DDPM(pl.LightningModule):
                 'None': Only return the final denoised image
         """
 
+        for key, tensor in batch.items():
+            batch[key] = tensor.to(self.device)
+
         observation_batch = batch
         # Create Condition vectors for the model
         obs_cond = self.prepare_obs_cond_vectors(observation_batch) # (B, obs_horizon, obs_dim)
@@ -243,10 +249,10 @@ class Diffusion_DDPM(pl.LightningModule):
         inpaint_vector  = self.prepare_inpaint_vectors(observation_batch) # (B, inpainting_horizon, pred_dim)
         inpaint_vector = inpaint_vector[0,...].unsqueeze(0).unsqueeze(1) # (1, 1, inpainting_horizon, pred_dim)
         B = obs_cond.shape[0]
+        x_t = torch.rand(1, 1, self.pred_horizon + self.inpaint_horizon, self.prediction_dim, device=self.device)    
 
         if option == 'sample_history':
-            # init scheduler and vector
-            x_t = torch.rand(1, 1, self.pred_horizon + self.inpaint_horizon, self.prediction_dim, device=self.device)    
+            # init scheduler and vector to store all samples    
             sampling_history = [x_t]
             self.noise_scheduler.set_timesteps(self.noise_steps)
         

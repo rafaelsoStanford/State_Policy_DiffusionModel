@@ -40,12 +40,13 @@ import Box2D
 from Box2D.b2 import fixtureDef
 from Box2D.b2 import polygonShape
 from Box2D.b2 import contactListener
+from collections    import deque
 
 import gym
 from gym import spaces
 # from gym.envs.box2d.car_dynamics import Car
-# from envs.car_dynamics import Car
-from car_dynamics import Car
+from envs.car_dynamics import Car
+# from car_dynamics import Car
 from gym.utils import seeding, EzPickle
 
 import pyglet
@@ -153,7 +154,7 @@ class CarRacing(gym.Env, EzPickle):
         self.t4 = []
         self.t5 = []
 
-        self.pointsBuffer = []
+        self.pointsBuffer = None
         self.augmImageRender = None # Augmented rendering of state image. This is meant to generate track lines for different agents to follow.
 
         self.fd_tile = fixtureDef(
@@ -602,8 +603,7 @@ class CarRacing(gym.Env, EzPickle):
             self.viewer.close()
             self.viewer = None
 
-    def add_points2Buffer(self, pos_array: np.array):
-        self.pointsBuffer.append(pos_array, axis=0)
+
     
     def render_road(self, with_add_tracklines=False):
         colors = [0.4, 0.8, 0.4, 1.0] * 4
@@ -689,19 +689,25 @@ class CarRacing(gym.Env, EzPickle):
 
 
     def render_pointsBuffer(self):
-        
-        if len(self.pointsBuffer) == 0:
+        if self.pointsBuffer is None:
             return # nothing to render
         
-        shape = self.pointsBuffer.shape
-
-        for l in range(shape[0]):
+        assert (type(self.pointsBuffer) == deque), "pointsBuffer must be a deque"
+        lenght = len(self.pointsBuffer)
+        
+        for l in range(lenght):
+            # print(self.pointsBuffer[l, :])
             pyglet.gl.glColor3f(1, 0, 0)
-            pyglet.graphics.draw(len(self.pointsBuffer[l]), pyglet.gl.GL_LINE_STRIP,
-                                ('v2f', [v for point in self.pointsBuffer[l] for v in point]))
+            pyglet.graphics.draw(len(self.pointsBuffer[l]), pyglet.gl.GL_LINE_STRIP, ('v2f', [v for point in self.pointsBuffer[l] for v in point]))
 
         
-
+    def add_points2Buffer(self, position_array: np.array):
+        assert type(position_array) == np.ndarray, "position_array must be a numpy array"
+        if self.pointsBuffer is None:
+            self.pointsBuffer = deque(maxlen=100)
+            self.pointsBuffer.append(position_array)
+        else:
+            self.pointsBuffer.append(position_array)  # add new points to buffer
             
 
     def render_indicators(self, W, H):
