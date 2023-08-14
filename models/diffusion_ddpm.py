@@ -66,7 +66,8 @@ class Diffusion_DDPM(pl.LightningModule):
             num_train_timesteps=self.noise_steps, # 1000
             beta_schedule= noise_scheduler_type,#'squaredcos_cap_v2', # 'cosine_beta_schedule'
             clip_sample=True, # clip to [-1, 1]
-            prediction_type='epsilon' # 'predicting error'
+            prediction_type='epsilon', # 'predicting error'
+            variance_type='fixed_large'
         )
 
     # --------------------- Model --------------------- 
