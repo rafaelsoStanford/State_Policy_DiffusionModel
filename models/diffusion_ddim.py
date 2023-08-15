@@ -44,12 +44,31 @@ class Diffusion_DDIM(Diffusion_DDPM):
             a_tnext = self.alphas_cumprod[t_next]
 
             x_1 = a_tnext.sqrt() * (x - (1 - a_t).sqrt() * self.noise_estimator(x, t, obs_cond)) / a_t.sqrt()
-            x_2 = (1 - a_tnext).sqrt() * self.noise_estimator(x, t_next, obs_cond)
+            x_2 = (1 - a_tnext).sqrt() * self.noise_estimator(x, t, obs_cond)
 
             x = x_1 + x_2
             x = self.add_constraints(x, x_0)
             sampling_history.append(x.squeeze().detach().cpu().numpy().copy())
             t = t_next
+
+
+        #         # Create a subet of all timesteps
+        # timesteps = np.flip(np.arange(noise_steps)) # [0 1 2 3 4 5 6 7 8 9, ... , noise_steps]
+        # t_subset = timesteps[::step_size] # [0 2 4 6 8, ... , noise_steps]
+
+        # for idx, timestep in enumerate(t_subset):
+
+        #     timestep_prev = t_subset[idx+1] if idx > len(t_subset) else None
+        #     alpha_bar_t = self.alphas_cumprod[timestep]
+        #     alpha_bar_t_prev = self.alphas_cumprod[timestep_prev] if timestep_prev is not None else 0
+
+
+        #     x_1 = alpha_bar_t_prev.sqrt() * (x - (1 - alpha_bar_t).sqrt() * self.noise_estimator(x, t, obs_cond)) / alpha_bar_t.sqrt()
+        #     x_2 = (1 - alpha_bar_t_prev).sqrt() * self.noise_estimator(x, timestep, obs_cond)
+
+        #     x = x_1 + x_2
+        #     x = self.add_constraints(x, inpaint_vector)
+        # return x
         
         for t in reversed(range(0, ddpm_steps)):
             x = self.p_reverseProcess(obs_cond, x, t)
