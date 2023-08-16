@@ -7,7 +7,7 @@ from torchvision import models
 class Autoencoder(nn.Module):
     def __init__(self, channels=3, latent_dim = 128):
         super().__init__()        
-        # N, 3, 28, 28
+        # N, 3, 94, 94
         self.encoder = nn.Sequential(
             nn.Conv2d(channels, 16, 2 , stride=2, padding=1), # -> N, 16, 48, 48
             nn.ReLU(),
@@ -27,7 +27,7 @@ class Autoencoder(nn.Module):
             nn.ReLU(),
             nn.ConvTranspose2d(32, 16, 2, stride=2, padding=0),  # N, 16, 48, 48 (N,16,47,47)
             nn.ReLU(),
-            nn.ConvTranspose2d(16, channels, 2, stride=2, padding=0),   # N, 3, 96, 96 (N,3,95,95)
+            nn.ConvTranspose2d(16, channels, 2, stride=2, padding=0),   # N, 3, 96, 96 (N,3,96,96)
             nn.Sigmoid()
         )
 
