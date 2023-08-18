@@ -7,26 +7,9 @@ import time
 import argparse
 
 
-def load_model(model_name, checkpoint_path, hparams_path):
-    if model_name == 'DDIM':
-        model = Diffusion_DDIM.load_from_checkpoint(checkpoint_path, hparams_file=hparams_path)
-
-        num_of_ddim_steps = 1000
-        noise_scheduler = DDIMScheduler(
-                num_train_timesteps= num_of_ddim_steps, # 1000
-                beta_schedule= 'linear',#'squaredcos_cap_v2', # 'cosine_beta_schedule'
-                clip_sample=False, # clip to [-1, 1]
-                prediction_type='epsilon', # 'predicting error'
-            )
-        model.noise_scheduler = noise_scheduler # overwrite the ddpm noise scheduler with ddim noise scheduler
-        model.noise_steps = num_of_ddim_steps # Slight abuse of the use of noise steps; Noise steps was used for DDPM training, now storing the desired number of DDIM steps
-
-    model.eval()
-    return model
-
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', type=str, default='DDIM', help="Can be 'DDPM', 'DDIM', or 'DDIPM'")
+    parser.add_argument('--model_name', type=str, default='DDIM', help="Can be 'DDPM', 'DDIM'")
     parser.add_argument('--version', type=str, default='860', help='Version control variable')
     parser.add_argument('--checkpoint_epoch', type=str, default='4', help='Checkpoint epoch')
     parser.add_argument('--stats_file_name', type=str, default='STATS.pkl', help='Stats file name')
@@ -36,6 +19,23 @@ def parse_arguments():
     parser.add_argument('--seed', type=int, default=125, help='Random seed')
     args = parser.parse_args()
     return args
+
+def load_model(model_name, checkpoint_path, hparams_path, num_of_ddim_steps = 100):
+    if model_name == 'DDPM':
+        model = Diffusion_DDPM.load_from_checkpoint(checkpoint_path, hparams_file=hparams_path)
+    if model_name == 'DDIM':
+        model = Diffusion_DDIM.load_from_checkpoint(checkpoint_path, hparams_file=hparams_path)
+        noise_scheduler = DDIMScheduler(
+                num_train_timesteps= num_of_ddim_steps, # 1000
+                beta_schedule= 'linear',#'squaredcos_cap_v2', # 'cosine_beta_schedule'
+                clip_sample=False, # clip to [-1, 1]
+                prediction_type='epsilon', # 'predicting error'
+            )
+        model.noise_scheduler = noise_scheduler # overwrite the ddpm noise scheduler with ddim noise scheduler
+        model.noise_steps = num_of_ddim_steps # Slight abuse of the use of noise steps; Noise steps was used for DDPM training, now storing the desired number of DDIM steps
+    model.eval()
+    return model
+
 
 # ==========================================
 # ================== Main ==================
@@ -72,6 +72,9 @@ print(f'***Sampling with {args.model_name}...')
 start = time.time()
 if args.model_name == 'DDIM':
     sampling_history = model.sample(batch=observation_batch, option='sample_history')
+if args.model_name == 'DDPM':
+    sampling_history = model.sample(batch=observation_batch, option='sample_history')
+
 end = time.time()
 print(f'*** Time taken for sampling: {end-start} ***')
 
