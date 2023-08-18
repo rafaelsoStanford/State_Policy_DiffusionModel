@@ -3,9 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import numpy as np
+import cv2
 
 
-dataset_path = "./data/2023-07-10-0053_dataset_1_episodes_3_modes.zarr.zip"
+dataset_path = './data/2023-07-17-2252_dataset_1_episodes_2_modes.zarr.zip'
 # read from zarr dataset
 dataset_root = zarr.open(dataset_path, 'r')
 
@@ -14,7 +15,8 @@ train_data = {
     # Create Prediction Targets
     'position': dataset_root['data']['position'][:], # (T,2)
 #            'velocities_pred': dataset_root['data']['velocity'][:] # (T,2)
-    'action': dataset_root['data']['action'][:] #(T,3)
+    'action': dataset_root['data']['action'][:] ,#(T,3),
+    'image' : dataset_root['data']['img'][:]#np.moveaxis(dataset_root['data']['img'][:], -1, 1) #(T,3,96,96)
 }
 episode_ends = dataset_root['meta']['episode_ends'][:]
 
@@ -25,6 +27,16 @@ maxAction = np.max(action_data, axis=0)
 
 print ("minAction: ", minAction)
 print ("maxAction: ", maxAction)
+
+
+#Plot image
+fig, ax = plt.subplots(1,1)
+# BGR to RGB
+img = train_data['image'][0]
+ax.imshow(img)
+
+ax.axis('off')  
+plt.show()
 
 # Visualize the action data
 fig = plt.figure()

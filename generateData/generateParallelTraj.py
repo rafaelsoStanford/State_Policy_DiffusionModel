@@ -18,13 +18,15 @@ import trajectory_control_utils as tc_utils
 # -------Global variables------- #
 global render_mode 
 max_steps = 2000
-seeds =  [42] # np.random.randint(43, 500, size=NUM_EPISODES) # [42] #
+
 
 
 def driving(buffer, NUM_EPISODES, MODE, VELOCITIES):
     # ======================  START RUN  ====================== #
     print("*"*10 +" Starting run...: Current Mode: ", MODE, "*"*10)
+    seeds = np.random.randint(43, 500, size=NUM_EPISODES) # [42] #
     for episode in range(NUM_EPISODES):   
+        print("*"*10 +" Starting episode: ", episode, "*"*10)
         # -----  Initialize buffers ----- #
         error_velocity_buffer =     deque(np.zeros(7), maxlen = 7)
         error_buffer =              deque(np.zeros(10), maxlen = 10) 
@@ -112,7 +114,8 @@ if __name__ == "__main__":
     parser.add_argument("--base_dir", type=str, default="./data/", help="Base directory")
     parser.add_argument("--modes", nargs="+", default=["left" , "right"], help="Modes list")
     parser.add_argument("--velocities", nargs="+", default=[ 30 ], help="Velocities list")
-    parser.add_argument("--render_mode", type=str, default="human", help="render mode of gym env. human means render, rgb_array means no render visible")
+    parser.add_argument("--render_mode", type=str, default="state_pixels", help="render mode of gym env. human means render, rgb_array means no render visible")
+
 
     args = parser.parse_args()
     render_mode = args.render_mode
@@ -130,7 +133,3 @@ if __name__ == "__main__":
     print()
 
     generate_data(args)
-
-    with open('states_list.pkl', 'rb') as f:
-        states = pickle.load(f)
-    print(states[0])

@@ -1,19 +1,22 @@
+# std libs
+from datetime import datetime
+import io
 
+#  packages
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
-import os
+import matplotlib.pyplot as plt
+from matplotlib.cm import get_cmap
+from PIL import Image
 import numpy as np
-from datetime import datetime
 
-# Loading modules
+#  modules
+from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from models.Unet_FiLmLayer import *
 from models.simple_Unet import * 
+from models.Unet_FiLmLayer_noAttention import *
 from models.encoder.autoencoder import *
-from utils.schedulers import *
-from utils.print_utils import *
-from utils.plot_utils import *
-
 
 
 class Diffusion_DDPM(pl.LightningModule):
@@ -26,14 +29,15 @@ class Diffusion_DDPM(pl.LightningModule):
                 , learning_rate = 1e-4
                 , model = 'UNet'
                 , vision_encoder = None
-                , noise_scheduler = 'linear'
+                , noise_scheduler_type = 'linear'
                 , inpaint_horizon = 10
+                , step_size = 1
                 ):
         super().__init__()
 
         self.save_hyperparameters()
         self.date = datetime.today().strftime('%Y_%m_%d_%H-%M-%S')
-# ==================== Init ====================
+
     # --------------------- Diffusion params ---------------------
         self.noise_steps = self.hparams.noise_steps
         self.NoiseScheduler = None
@@ -43,34 +47,30 @@ class Diffusion_DDPM(pl.LightningModule):
         self.prediction_dim = prediction_dim
         self.inpaint_horizon = inpaint_horizon
 
+
+        print("Using currently device: ", self.device)
+
     # --------------------- Model Architecture ---------------------
         if model == 'UNet_Film':
             print("Loading UNet with FiLm conditioning")
             self.model = UNet_Film
+        elif model == 'UNet_FilmnoAttention':
+            print("Loading UNet with FiLm conditioning, no attention Layers")
+            self.model = UNet_Film_noAttention
         else:
             print("Loading UNet (simple) ")
             self.model = UNet
 
-    # --------------------- Noise Schedule Params---------------------
-        if noise_scheduler == 'linear_v2':
-            self.NoiseScheduler = linear_beta_schedule_v2
-        if noise_scheduler == 'linear':
-            self.NoiseScheduler = linear_beta_schedule
-        if noise_scheduler == 'cosine_beta_schedule':
-            self.NoiseScheduler = cosine_beta_schedule
-
-        betas =  self.NoiseScheduler(self, noise_steps)
-        alphas = 1. - betas
-        alphas_cumprod = torch.cumprod(alphas, dim=0)
-
-        self.register_buffer('betas', betas)
-        self.register_buffer('alphas', alphas)
-        self.register_buffer('alphas_cumprod', alphas_cumprod)
-        # calculations for diffusion q(x_t | x_{t-1}) and others
-        self.register_buffer('sqrt_alphas_cumprod', torch.sqrt(alphas_cumprod))
-        self.register_buffer('sqrt_one_minus_alphas_cumprod', torch.sqrt(1. - alphas_cumprod))
+    # # --------------------- Noise Schedule Params---------------------
+        self.noise_scheduler = DDPMScheduler(
+            num_train_timesteps=self.noise_steps, # 1000
+            beta_schedule= 'linear',#'squaredcos_cap_v2', # 'cosine_beta_schedule'
+            clip_sample=False, # clip to [-1, 1]
+            prediction_type='epsilon', # 'predicting error'
+        )
 
     # --------------------- Model --------------------- 
+        # Model parameters
         self.lr = learning_rate  
         self.loss = nn.MSELoss()
         self.noise_estimator = self.model(
@@ -81,55 +81,34 @@ class Diffusion_DDPM(pl.LightningModule):
                                     time_dim = 256 # Embedding dimension for time (t) of the current denoising step
                                 )
 
-        ### Define model which will be a simplifed 1D UNet
-        if vision_encoder == 'resnet18':
-            print("Loading Resnet18")
-            self.vision_encoder = VisionEncoder() # Loads pretrained weights of Resnet18 with output dim 512 (also modified layers as Suggested by Song et al.)
-        else:
-            print("Loading lightweight Autoencoder")
-            vision = autoencoder.load_from_checkpoint(checkpoint_path="./tb_logs_autoencoder/version_23/checkpoints/epoch=25.ckpt")
-            self.vision_encoder = vision.encoder
+        print("Loading lightweight Autoencoder")
+        vision = autoencoder.load_from_checkpoint(checkpoint_path="./tb_logs_autoencoder/version_23/checkpoints/epoch=25.ckpt")
+        self.vision_encoder = vision.encoder
         self.vision_encoder.device = self.device
         self.vision_encoder.eval() # 128 entries
 
-        # --------------------- Output environment settings ---------------------
-        if os.getenv("LOCAL_RANK", '0') == '0':
-            print_hyperparameters(
-                                obs_horizon, 
-                                pred_horizon, 
-                                observation_dim, 
-                                prediction_dim, 
-                                noise_steps, 
-                                inpaint_horizon, 
-                                model, 
-                                learning_rate, 
-                                vision_encoder)
-            # print("Model Architecture: ", self.noise_estimator)
 
 # ==================== Training ====================
     def training_step(self, batch, batch_idx):
-        loss = self.onepass(batch, batch_idx, mode="train")
+        loss = self.process_single_batch(batch)
         self.log("train_loss",loss)
         self.log('lr', self.optimizers().param_groups[0]['lr'])
         return loss
 
-# ==================== Testing ====================
-    def test_step(self, batch, batch_idx):
-        if batch_idx == 0:
-            self.sample(batch, mode="test", step_size = 20 )
 
 # ==================== Validation ====================    
     def validation_step(self, batch, batch_idx):
         if batch_idx == 0:
-            x_0_predicted , x_0, obs_cond = self.sample(batch, mode="validation")
+            x_0_predicted , observation_batch , inpaint_vector = self.validate(batch)
             # Plot to tensorboard
-            plt_toTensorboard(self,
-                x_0=x_0,
-                pred=x_0_predicted,
-                obs_cond=obs_cond,
+            self.plt2tensorboard(
+                batch = batch,
+                prediction=x_0_predicted,
+                inpaint_vector=inpaint_vector,
+                observation_batch=observation_batch,
             )
             
-        loss = self.onepass(batch, batch_idx, mode="validation")
+        loss = self.process_single_batch(batch)
         self.log("val_loss",loss,  sync_dist=True)
         return loss
 
@@ -146,109 +125,313 @@ class Diffusion_DDPM(pl.LightningModule):
         }
 
 # ==================== Noising / Denoising Processes ====================
-    def onepass(self, batch, batch_idx, mode="train"):
+    def process_single_batch(self, batch):
+        """
+            Structure of batch:
+            batch = {
+                image = (B, 1, obs_horizon + pred_horizon, 128)
+                position = (B, 1, obs_horizon + pred_horizon, 2)
+                velocity = (B, 1, obs_horizon + pred_horizon, 2)
+                actions = (B, 1, obs_horizon + pred_horizon, 3)
+            }
+
+            The first obs_horizon entries are used for conditioning the model (contextual input to the model)
+            The last pred_horizon entries are needed for the forward process vector 
+        """
+
         # ---------------- Preparing Observation / Prediction data ----------------
-        x_0 , obs_cond = self.prepare_pred_cond_vectors(batch)
-        x_0 = x_0.unsqueeze(1)
-        obs_cond = obs_cond.unsqueeze(1)
+        # Sepearate observation and prediction data
+        observation_batch = self.prepare_observation_batch(batch)
+        prediction_batch = self.prepare_prediction_batch(batch)
+        
+        # Create Condition vectors for the model
+        obs_cond = self.prepare_obs_cond_vectors(observation_batch) # (B, obs_horizon, obs_dim)
+        obs_cond = obs_cond.unsqueeze(1) # (B, 1, obs_horizon, obs_dim)
+        
+        # Prepare prediction data vector for the forward process
+        x_0 = self.prepare_prediction_vectors(prediction_batch) # (B, pred_horizon, pred_dim)
+        x_0 = x_0.unsqueeze(1) # (B, 1, pred_horizon, pred_dim)
+
+        # Prepare an inpainting vector
+        x_0_inpaint = self.prepare_inpaint_vectors(observation_batch) # (B, inpainting_horizon, pred_dim)
+        x_0_inpaint = x_0_inpaint.unsqueeze(1) # (B, 1, inpainting_horizon, pred_dim)
         B = x_0.shape[0]
 
         # ---------------- Forward Process ----------------
-        t = torch.randint(0, self.noise_steps, (B,), device=self.device).long() # Values from [0, 999]
-        noise = torch.randn_like(x_0)
-        x_noisy = self.q_forwardProcess(x_0, t, noise) # (B, 1 , pred_horizon, pred_dim)
-        x_noisy = self.add_constraints(x_noisy, x_0)
+        ddpm_scheduler = self.noise_scheduler
+        t = torch.randint(0, self.noise_steps, (B,), device=self.device).long() # Value range [0, 999]
+        # Prepare  prediction vector:
+        prediction_vector = torch.cat( [x_0_inpaint, x_0] , dim=2) # Concat in time dim
+        noise = torch.randn_like(prediction_vector)
 
+        x_noisy = ddpm_scheduler.add_noise( prediction_vector, noise, t)
+        x_noisy = self.add_constraints(x_noisy, x_0_inpaint)
         # ---------------- Estimate noise / Single Backward process ----------------
         noise_estimated = self.noise_estimator(x_noisy, t, obs_cond)
-
         # ----------------  Loss ----------------
         loss = self.loss(noise, noise_estimated) #MSE Loss
         return loss
     
-# ==================== Sampling ====================
-    def sample(self, batch, mode, denoising_steps = 1000):
-        # ---------------- Prepare Data ----------------
-        x_0 , obs_cond = self.prepare_pred_cond_vectors(batch)
-        x_0 = x_0[0,...].unsqueeze(0).unsqueeze(1)
-        obs_cond = obs_cond[0,...].unsqueeze(0).unsqueeze(1)
-    
-        if mode == 'validation':
-            x_0_predicted = self.p_reverseProcess_loop(x_cond = obs_cond, x_0 = x_0)
-            return x_0_predicted , x_0, obs_cond
-            
-        if mode == 'test':
-            sampling_history = []
+# ==================== Validation ====================
+    def validate(self, batch):
+        """
+            For generating samples, we only need observation data as input.
+            This function is meant to be used for validation during training.
+
+            Structure of batch:
+            batch = {
+                image = (B, obs_horizon + pred_horizon, 128)
+                position = (B, obs_horizon + pred_horizon, 2)
+                velocity = (B, obs_horizon + pred_horizon, 2)
+                actions = (B, obs_horizon + pred_horizon, 3)
+            }
+            The batch includes both observation and prediction data.
+            The first obs_horizon entries are used for conditioning the model (contextual input to the model)
+        """
+        # Sepearate observation and prediction data
+        observation_batch = self.prepare_observation_batch(batch)
+
+        # Create Condition vectors for the model
+        obs_cond = self.prepare_obs_cond_vectors(observation_batch) # (B, obs_horizon, obs_dim)
+        obs_cond = obs_cond[0,...].unsqueeze(0).unsqueeze(1) # (, 1, obs_horizon, obs_dim)
+
+        # Prepare an inpainting vector
+        inpaint_vector  = self.prepare_inpaint_vectors(observation_batch) # (B, inpainting_horizon, pred_dim)
+        inpaint_vector = inpaint_vector[0,...].unsqueeze(0).unsqueeze(1) # (1, 1, inpainting_horizon, pred_dim)
+        B = obs_cond.shape[0]
+
+        # init scheduler
+        self.noise_scheduler.set_timesteps(self.noise_steps)
+        x_t = torch.rand(1, 1, self.pred_horizon + self.inpaint_horizon, self.prediction_dim, device=self.device)        
+        for i, t in enumerate(self.noise_scheduler.timesteps):
+            # 1. predict noise residual
             with torch.no_grad():
-                x_t = torch.rand(1, 1, self.pred_horizon + self.inpaint_horizon, self.prediction_dim, device=self.device)
+                est_noise = self.noise_estimator(x_t, torch.tensor([t], device=self.device), obs_cond)
+            # 2. compute less noisy image and set x_t -> x_t-1
+            x_t = self.noise_scheduler.step(est_noise, t, x_t).prev_sample
+            # 3. inpaint
+            x_t = self.add_constraints(x_t, inpaint_vector)
+        return x_t , observation_batch , inpaint_vector
 
-                for t in reversed(range(0, denoising_steps)): # t ranges from denoising_steps-1 to 0
-                    x_t =  self.p_reverseProcess(obs_cond,  x_t,  t)
-                    x_t = self.add_constraints(x_t, x_0)
-                    sampling_history.append(x_t.squeeze().detach().cpu().numpy())
-            return sampling_history , x_0
-
-    # q(x_t | x_0)
-    def q_forwardProcess(self, x_start, t, noise):
-        x_t = torch.sqrt(self.alphas_cumprod[t])[:,None,None,None] \
-                * x_start + torch.sqrt(1-self.alphas_cumprod[t])[:,None,None,None] * noise
+    def add_constraints(self, x_t , x_inpaint):
+        # Reverse x_inpaint and overwrite the first inpaint_horizon entries of x_t
+        x_t[:, : , :self.inpaint_horizon, :] = x_inpaint
         return x_t
 
-    # p(x_t-1 | x_t)
-    @torch.no_grad()
-    def p_reverseProcess_loop(self, x_cond, x_0 , x_T = None):
-        if x_T is None:
-            x_t = torch.rand(1, 1, self.pred_horizon + self.inpaint_horizon, self.prediction_dim, device=self.device) \
-                    + x_0[:, : , self.inpaint_horizon, :]
-        else:
-            x_t = x_T
+
+    # ==================== Sampling ====================
+    def sample(self, batch, option = None):
+        """
+         For generating samples, we only need observation data as input.
+        Structure of batch:
+        batch = {
+                image = (B, obs_horizon  , 128)
+                position = (B, obs_horizon  , 2)
+                velocity = (B, obs_horizon  , 2)
+                actions = (B, obs_horizon  , 3)
+        }
+        The batch includes only observation data.
+        The first obs_horizon entries are used for conditioning the model (contextual input to the model)
+
+        option: 'sample_history': Retain the history of all denoising steps
+                'None': Only return the final denoised image
+        """
+
+        for key, tensor in batch.items():
+            batch[key] = tensor.to(self.device)
+
+        observation_batch = batch
+        # Create Condition vectors for the model
+        obs_cond = self.prepare_obs_cond_vectors(observation_batch) # (B, obs_horizon, obs_dim)
+        obs_cond = obs_cond[0,...].unsqueeze(0).unsqueeze(1) # (, 1, obs_horizon, obs_dim)
+
+        # Prepare an inpainting vector
+        inpaint_vector  = self.prepare_inpaint_vectors(observation_batch) # (B, inpainting_horizon, pred_dim)
+        inpaint_vector = inpaint_vector[0,...].unsqueeze(0).unsqueeze(1) # (1, 1, inpainting_horizon, pred_dim)
+        B = obs_cond.shape[0]
+        x_t = torch.rand(1, 1, self.pred_horizon + self.inpaint_horizon, self.prediction_dim, device=self.device)    
+
+        if option == 'sample_history':
+            # init scheduler and vector to store all samples    
+            sampling_history = [x_t]
+            self.noise_scheduler.set_timesteps(self.noise_steps)
         
-        for t in reversed(range(0,self.noise_steps)): # t ranges from 999 to 0
-            x_t =  self.p_reverseProcess(x_cond,  x_t,  t)
-            x_t = self.add_constraints(x_t, x_0)
+            for i, t in enumerate(self.noise_scheduler.timesteps):
+                with torch.no_grad():
+                    est_noise = self.noise_estimator(x_t, torch.tensor([t], device=self.device), obs_cond)
+                x_t = self.noise_scheduler.step(est_noise, t, x_t).prev_sample
+                x_t = self.add_constraints(x_t, inpaint_vector)
+                sampling_history.append(x_t)
+            return sampling_history # Return a list of all successive samples x_T to x_0
+
+        # init scheduler stepsize
+        self.noise_scheduler.set_timesteps(self.noise_steps)
+        for i, t in enumerate(self.noise_scheduler.timesteps):
+            # 1. predict noise residual
+            with torch.no_grad():
+                est_noise = self.noise_estimator(x_t, torch.tensor([t], device=self.device), obs_cond)
+            # 2. compute less noisy image and set x_t -> x_t-1
+            x_t = self.noise_scheduler.step(est_noise, t, x_t).prev_sample
+            # 3. inpaint
+            x_t = self.add_constraints(x_t, inpaint_vector)
         return x_t
 
-    @torch.no_grad()
-    def p_reverseProcess(self, x_cond, x_t, t):
-        if t == 0:
-            z = torch.zeros_like(x_t) 
-        else:
-            z = torch.randn_like(x_t)
-        est_noise = self.noise_estimator(x_t, torch.tensor([t], device=self.device), x_cond)
-        x_t = 1/torch.sqrt(self.alphas[t]) \
-                * (x_t-(1-self.alphas[t])/torch.sqrt(1-self.alphas_cumprod[t])*est_noise) \
-                        +  torch.sqrt(self.betas[t])*z
-        return x_t
-
-    def add_constraints(self, x_t , x_0):
-        x_t[:, : , :self.inpaint_horizon, :] = x_0[:, : , :self.inpaint_horizon, :].clone()
-        return x_t
-
+    # ==========================================================
     # ==================== Helper functions ====================
-    def prepare_pred_cond_vectors(self, batch):
-        
-        normalized_img    =  batch['image'][:,:self.obs_horizon ,:].float().to(self.device) 
-        normalized_pos    =  batch['position'][:,:self.obs_horizon ,:].float().to(self.device) 
-        normalized_act    =  batch['action'][:,:self.obs_horizon,:].float().to(self.device) 
-        normalized_vel    =  batch['velocity'][:,:self.obs_horizon ,:].float().to(self.device) 
+    # ==========================================================
+    
+    def prepare_observation_batch(self, batch):
+        """
+        Prepares the observation batch for the model
+        """
+        normalized_img    =  batch['image'][:,:self.obs_horizon ,:].to(self.device).float()
+        normalized_pos    =  batch['position'][:,:self.obs_horizon ,:].to(self.device).float()
+        normalized_act    =  batch['action'][:,:self.obs_horizon,:].to(self.device).float()
+        normalized_vel    =  batch['velocity'][:,:self.obs_horizon ,:].to(self.device).float()
 
+        observation_batch = {
+            'image': normalized_img,
+            'position': normalized_pos,
+            'action': normalized_act,
+            'velocity': normalized_vel
+        }
+        return observation_batch
+    
+    def prepare_prediction_batch(self, batch):
+        """
+        Prepares the prediction batch for the model
+        """
+        normalized_img    =  batch['image'][:,self.obs_horizon: ,:].to(self.device).float()
+        normalized_pos    =  batch['position'][:,self.obs_horizon: ,:].to(self.device).float()
+        normalized_act    =  batch['action'][:,self.obs_horizon: ,:].to(self.device).float()
+        normalized_vel    =  batch['velocity'][:,self.obs_horizon: ,:].to(self.device).float()
+
+        prediction_batch = {
+            'image': normalized_img,
+            'position': normalized_pos,
+            'action': normalized_act,
+            'velocity': normalized_vel
+        }
+        return prediction_batch
+    
+    def prepare_obs_cond_vectors(self, observation_batch):
+        img_data = observation_batch['image']
         # ---------------- Encoding Image data ----------------
-
-        encoded_img = self.vision_encoder(normalized_img.flatten(end_dim=1)) # (B, 128)
-        image_features = encoded_img.reshape(*normalized_img.shape[:2],-1) # (B, t_0:t_obs , 128)
+        encoded_img = self.vision_encoder(img_data.flatten(end_dim=1)) # (B, 128)
+        image_features = encoded_img.reshape(*img_data.shape[:2],-1) # (B, t_0:t_obs , 128)
 
         # ---------------- Conditional vector ----------------
         # Concatenate position and action data and image features
-        obs_cond = torch.cat([normalized_pos, normalized_act,normalized_vel, image_features], dim=-1) # (B, t_0:t_obs, 2 + 3 + 2 + 128)
+        obs_cond = torch.cat([  observation_batch['position'], 
+                                observation_batch['action'],
+                                observation_batch['velocity'], 
+                                image_features], 
+                                dim=-1)        # (B, t_0:t_obs , 128+4+2)
+        return obs_cond
 
-        # ---------------- Preparing Prediction data (acts as ground truth) ----------------
-        x_0_pos = batch['position'][:,self.obs_horizon: ,:].to(self.device) # (B, t_obs:t_pred , 2)
-        x_0_act = batch['action'][:, self.obs_horizon: ,:].to(self.device) # (B, t_obs:t_pred, 3)
-        x_0 = torch.cat([x_0_pos, x_0_act], dim=-1) # (B, t_obs:t_pred, 5)
+    def prepare_prediction_vectors(self, prediction_batch):
+        # ---------------- Preparing Prediction data  ----------------
+        # Concatenate position and action data
+        position_data = prediction_batch['position']
+        action_data = prediction_batch['action']
+        x_0 = torch.cat([position_data, action_data], dim=-1) # (B, t_obs:t_pred , 3+2)
+        return x_0
+    
+    def prepare_inpaint_vectors(self, observation_batch):
+        """
+        Extract inpaint horizon data from observation batch from the back
 
-        # Adding past obervation as inpainting condition
-        x_0 = torch.cat((obs_cond[:, -self.inpaint_horizon:, :5], x_0) , dim=1) # Concat in time dim
+        """
+        inpaint_position_vector = observation_batch['position'][:,-self.inpaint_horizon:,:]
+        inpaint_action_vector = observation_batch['action'][:,-self.inpaint_horizon:,:]
 
-        # ---------------- Assert cond dimensions compatible with model (important when preloading / changing conditioning data) ----------------
-        assert(obs_cond.shape[-1]*self.obs_horizon == self.noise_estimator.down1.cond_encoder[2].state_dict()['weight'].shape[1]) # Check if cond dim is correct
-        return x_0 , obs_cond
+        return torch.cat([inpaint_position_vector, inpaint_action_vector], dim=-1) # concat along state dim
+        
+
+    def plt2tensorboard(self, batch, prediction, inpaint_vector, observation_batch):
+        # Extract and plot position data
+        self._plot_positions(batch, prediction, inpaint_vector, observation_batch)
+        
+        # Extract and plot action data
+        self._plot_actions(batch, prediction, inpaint_vector, observation_batch)
+
+    def _plot_positions(self, batch, prediction, inpaint_vector, observation_batch):
+        # Extracting position data from the batches
+        position_observation = observation_batch['position'].cpu().numpy()[0]
+        positions_inpainted = inpaint_vector[0,0,...].cpu().numpy()[:, :2]
+        positions_groundtruth = batch['position'].cpu().numpy()[0]
+        positions_predicted = prediction.squeeze().cpu().numpy()[:, :2]
+
+        # Setting up the plotting
+        writer = self.logger.experiment
+        niter = self.global_step
+        plt.switch_backend('agg')
+        fig = plt.figure()
+        fig.clf()
+        
+        # Create a colormap and associated properties
+        cmap = get_cmap('viridis', self.pred_horizon + self.inpaint_horizon)
+        normalized_indices = np.arange(self.pred_horizon + self.inpaint_horizon) / (self.pred_horizon + self.inpaint_horizon - 1)
+        colors = cmap(normalized_indices)
+
+        # Plotting with labels for legend
+        plt.plot(positions_groundtruth[:,0], positions_groundtruth[:,1], 'g.', label="Ground Truth")
+        plt.plot(position_observation[:,0], position_observation[:,1], 'b.', label="Observation")
+        plt.scatter(positions_predicted[:,0], positions_predicted[:,1], color=colors, s=10, label="Predicted Positions")
+        plt.scatter(positions_inpainted[:,0], positions_inpainted[:,1], color='r', s=20, label="Inpainted Positions")
+        plt.xlabel('X Position')
+        plt.ylabel('Y Position')
+        plt.legend(loc="upper right")
+        plt.grid()
+        plt.axis('equal')
+
+        # Save to tensorboard
+        plt2tsb(fig, writer, 'Predicted_path ' + self.date, niter)
+        plt.close("all")
+
+    def _plot_actions(self, batch, prediction, inpaint_vector, observation_batch):
+        # Extracting action data from the batches
+        actions_observation = observation_batch['action'].cpu().numpy()[0]
+        actions_inpainted = inpaint_vector[0,0,...].cpu().numpy()[:, 2:]
+        actions_groundtruth = batch['action'].cpu().numpy()[0] # Shape (t_obs + t_pred, 2)
+        actions_groundtruth_reduced = actions_groundtruth[(self.obs_horizon-self.inpaint_horizon):, :] # Shape (t_inpaint + t_pred, 2)
+
+        actions_predicted = prediction.squeeze().cpu().numpy()[:, 2:] # Shape (inpaint + t_pred, 2)
+
+        # Setting up the plotting
+        writer = self.logger.experiment
+        niter = self.global_step
+        fig2, (ax1, ax2, ax3) = plt.subplots(1, 3)
+
+        # Defining a helper function for ax plotting (to reduce redundancy)
+        def plot_actions_on_ax(ax, action_pred, action_gt, title):
+            # ax.plot(action_pred[(self.obs_horizon-self.inpaint_horizon):, : ], c='r', label="Predicted")
+            ax.plot(action_gt, c='b', label="Ground Truth")
+            ax.scatter(np.arange(action_pred.shape[0]), action_pred, c='r', s=10, label = "Predicted Actions")
+
+            ax.axvspan(0, self.inpaint_horizon, alpha=0.2, color='red')
+            ax.axvspan(self.inpaint_horizon, action_pred.shape[0], alpha=0.2, color='green')
+            ax.set_title(title)
+        
+        plot_actions_on_ax(ax1, actions_predicted[:,0], actions_groundtruth_reduced[:,0], "Steering input")
+        plot_actions_on_ax(ax2, actions_predicted[:,1], actions_groundtruth_reduced[:,1], "Acceleration input")
+        plot_actions_on_ax(ax3, actions_predicted[:,2], actions_groundtruth_reduced[:,2], "Breaking input")
+
+        # Save to tensorboard
+        plt2tsb(fig2, writer, 'Action comparisons ' + self.date, niter)
+        plt.close('all')
+
+    
+def plt2tsb(figure, writer, fig_name, niter):
+    # Save the plot to a BytesIO object
+    buf = io.BytesIO()
+    figure.savefig(buf, format='png')
+    buf.seek(0)
+
+    # Open the image and convert to RGB, then to Tensor
+    image = Image.open(buf).convert('RGB')
+    image_tensor = torch.tensor(np.array(image)).permute(2, 0, 1)
+
+    # Add the image to TensorBoard
+    writer.add_image(fig_name, image_tensor, niter)
+    buf.close()

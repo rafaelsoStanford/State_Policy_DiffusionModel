@@ -1,3 +1,4 @@
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.cm import get_cmap
@@ -5,6 +6,50 @@ from PIL import Image
 import io
 import torch
 from matplotlib.animation import FuncAnimation
+
+# # %% Plotting
+# def my_plotter(ax, data1, data2, param_dict):
+#     """
+
+#     # source: https://matplotlib.org/stable/tutorials/introductory/usage.html#sphx-glr-tutorials-introductory-usage-pyimport matplotlib.pyplot as plt
+
+#     A helper function to make a graph
+#     Parameters
+#     ----------
+#     ax : Axes
+#         The axes to draw to
+
+#     data1 : array
+#        The x data
+
+#     data2 : array
+#        The y data
+
+#     param_dict : dict
+#        Dictionary of kwargs to pass to ax.plot
+
+#     Returns
+#     -------
+#     out : list
+#         list of artists added
+#     """
+#     out = ax.plot(data1, data2, **param_dict)
+#     return out
+
+
+# # 1 sub-plot example
+# data1, data2, data3, data4 = np.random.randn(4, 100)
+# fig, ax = plt.subplots(1, 1)
+# my_plotter(ax, data1, data2, {'marker': 'x'})
+
+
+# # 2 sub-plots example
+# fig, (ax1, ax2) = plt.subplots(1, 2)
+# my_plotter(ax1, data1, data2, {'marker': 'x'})
+# my_plotter(ax2, data3, data4, {'marker': 'o'});
+
+
+
 
 
 def visualize_batch(batch):
@@ -153,10 +198,13 @@ def plt_toTensorboard(self, pred,  obs_cond, x_0):
 
 def plt_toVideo(self, 
                 sampling_history,
-                position_observation,   
-                positions_groundtruth, 
-                actions_groundtruth ,
-                actions_observation):
+                batch,
+                saving_path,):
+    
+    position_observation    = batch[0]['position'].squeeze()[:self.obs_horizon].detach().cpu().numpy() #(20 , 2)
+    positions_groundtruth   = batch[0]['position'].squeeze().detach().cpu().numpy() #(20 , 2)
+    actions_groundtruth     = batch[0]['action'].squeeze().detach().cpu().numpy() #(20 , 3)
+    actions_observation     = batch[0]['action'].squeeze()[:self.obs_horizon].detach().cpu().numpy() #(20 , 3)
     # ---------------- Plotting ----------------
     # 
     sampling_positions = np.array(sampling_history)[:, :, :2]  # (1000, 45 , 2)
@@ -173,19 +221,29 @@ def plt_toVideo(self,
             normalized_indices = indices / (self.pred_horizon + self.inpaint_horizon - 1)
             colors = cmap(normalized_indices)
 
+
+            plt.plot(positions_groundtruth[:, 0], positions_groundtruth[:, 1], 'g.')
             plt.plot(position_observation[:, 0], position_observation[:, 1], 'b.')
-            plt.plot(positions_groundtruth[self.inpaint_horizon:, 0], positions_groundtruth[self.inpaint_horizon:, 1], 'g.')
             plt.scatter(sampling_positions[frame, :, 0], sampling_positions[frame, :, 1], color=colors, s=20)
 
             plt.grid()
             plt.axis('equal')
-            plt.xlim(-2, 2)
-            plt.ylim(-2, 2)
+            
+            # Use ground truth to define axis limits
+            plt.xlim(positions_groundtruth[:, 0].min(), positions_groundtruth[:, 0].max())
+            plt.ylim(positions_groundtruth[:, 1].min(), positions_groundtruth[:, 1].max())
 
-        fig.animation = FuncAnimation(fig, animate, frames=len(sampling_history), interval=20, repeat=False)
-        fig.animation.save('./animations/' + self.date + 'animation_positions.mp4', writer='ffmpeg')
-        print("Animation saved")
-        plt.close('all')
+        fig.animation = FuncAnimation(fig, animate, frames=len(sampling_history), interval=20, repeat=False, blit=False)
+        # fig.animation.save('./animations/' + self.date + 'animation_positions.gif', writer='pillow')
+        # print("Animation saved")
+        # plt.close('all')
+
+        # Save the animation as an MP4 file
+        fig.animation.save(saving_path + '/' + self.date + 'animation_positions.mp4', writer='ffmpeg')
+
+        print("Positions animation saved")
+
+
 
     def plot_actions():
         fig2, ax1 = plt.subplots()
@@ -194,22 +252,25 @@ def plt_toVideo(self,
             fig2.clf()
 
             plt.plot(actions_groundtruth[:, 0])
+            plt.plot(actions_observation[:, 0])
             # ax2.plot(actions_groundtruth[ :, 1])
             # ax3.plot(actions_groundtruth[ :, 2])
-            inpaint_start = 0
-            inpaint_end = self.inpaint_horizon
-            plt.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
-            plt.axvspan(inpaint_end, sampling_actions.shape[1], alpha=0.2, color='green')
+            # inpaint_start = 0
+            # inpaint_end = self.inpaint_horizon
+            # plt.axvspan(inpaint_start, inpaint_end, alpha=0.2, color='red')
+            # plt.axvspan(inpaint_end, sampling_actions.shape[1], alpha=0.2, color='green')
             #ax1.plot(sampling_actions[frame, :, 0])
-            plt.scatter(np.arange(sampling_actions.shape[1]), sampling_actions[frame,:,0] , c='r', s=10)
+            plt.scatter(np.arange(sampling_actions.shape[1]) + (self.obs_horizon - self.inpaint_horizon), sampling_actions[frame,:,0] , c='g', s=10)
 
             # ax3.plot(sampling_actions[frame, :, 2])
             plt.grid()
             plt.ylim(-1.5, 1.5)
 
-        fig2.animation = FuncAnimation(fig2, animate_actions, frames=len(sampling_history), interval=20, repeat=False)
-        fig2.animation.save('./animations/' + self.date + 'animation_actions.mp4', writer='ffmpeg')
-        print("Animation saved")
+        fig2.animation = FuncAnimation(fig2, animate_actions, frames=len(sampling_history), interval=20, repeat=False, blit=False)
+        
+        fig2.animation.save(saving_path + '/' + self.date + 'animation_actions.mp4', writer='ffmpeg')
+
+        print("Actions animation saved")
         plt.close('all')
 
     plot_actions()
