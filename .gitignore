@@ -43,11 +43,4 @@ tests/testingData/2023-07-27-1705/2023-07-27-1705_dataset_1_episodes_2_modes.zar
 tests/testingData/2023-07-27-1705/2023-07-27-1705_dataset_1_episodes_2_modes.zarr/meta/.zgroup
 tests/testingData/2023-07-27-1705/2023-07-27-1705_dataset_1_episodes_2_modes.zarr/meta/episode_ends/.zarray
 tests/testingData/2023-07-27-1705/2023-07-27-1705_dataset_1_episodes_2_modes.zarr/meta/episode_ends/0
-vis.mp4
-Middle of Road.avi
-middle.mp4
-output.avi
-video_good middle run.avi
-video.mp4
-video1.avi
-videoleft.avi
+/visuals/
