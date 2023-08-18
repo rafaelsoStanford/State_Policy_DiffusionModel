@@ -1,9 +1,9 @@
-# Diffusion Model - Robot Policies for Shared Autonomy
+# Leveraging Human Intent for Shared Autonomy
+This project is part of the research of the research conducted by the [Assistive Robotics and Manipulation Lab](https://arm.stanford.edu/research/leveraging-human-intent-shared-autonomy).
 
-### WORK IN PROGRESS ###
+## Goal of this Project:
 
-</br>![](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/blob/main/images/2023_06_29_21-07-14animation_positions.gif)
-</br>![](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/blob/main/images/2023_06_29_21-07-14animation_actions.gif) 
+This project investigates the posibility of predicting the future trajectory of a human driver by gathering observations of state/actions/environment data. By conditioning on such data we ...
 
 
 ## Leveraging Human Intent for Shared Autonomy and Risk Negotiation
