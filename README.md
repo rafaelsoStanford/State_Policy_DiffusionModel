@@ -13,18 +13,39 @@ We propose the use of conditioned diffusion models as a method of performing bot
 
 ![image](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/d0f50da3-fe63-4367-8153-ebed1eab75d0)
 
-##  How to Install and Run the Project
+##  How to Install
 Clone the project in a directory of you choice:
-'''bash
-git clone
-'''
+```console
+git clone <repository-url>
+```
+We recommend using a conda environment to manage project dependencies. Navigate to the cloned project's directory and run:
+```console
+conda create --name <env-name> python=3.9.0 --file requirements.txt
+```
+Replace <env-name> with the desired name for your conda environment.
 
+>  We used Python 3.9.0, later versions could end up incompatible due to gym.
+>  This repo relies on a modified carracing environment from gym v.21.0. Meaning it relies on the corresponding Box2d library.
 
-We suggest to create a conda environment and install the requirements. Enter the repository and run:
-'''bash
-conda create --name <env> --file requirements.txt
-'''
+## How to Run
 
+### Generating Datasets
+
+The datasets are generated using PID controllers to simulate various driving behaviors following different trajectories. These trajectories are controlled and deterministic, providing valuable ground truth data for the project.
+Possible trajectories are:
+    
+- Parallel: Simulates vehicles driving on different sides of the road in a parallel manner.
+- Sinusoidal: Mimics a drunk driving behavior with a sinusoidal trajectory.
+
+Enter the folder 
+
+```console
+cd generateData
+```
+
+Once you're in the generateData folder, you can execute a generation script of your choice using the following command: `python filename.py`. 
+
+If you need help or additional information about the available options, you can use the --help flag: `python filename.py --help`. 
 
 
 
