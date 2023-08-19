@@ -1,9 +1,32 @@
-# Diffusion Model - Robot Policies for Shared Autonomy
+# Leveraging Human Intent for Shared Autonomy and Risk Negotiation
+This project is part of the research of the research conducted by the [Assistive Robotics and Manipulation Lab](https://arm.stanford.edu/research/leveraging-human-intent-shared-autonomy). Please visit the website for the full scope of the project.
 
-### WORK IN PROGRESS ###
+## Goal of this Project:
 
-</br>![](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/blob/main/images/2023_06_29_21-07-14animation_positions.gif)
-</br>![](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/blob/main/images/2023_06_29_21-07-14animation_actions.gif) 
+Our focus lies in exploring the feasibility of forecasting the upcoming trajectory of a human driver. This involves accumulating datasets comprising state (position , velocity), action, and environment (visual) information. Through this contextual information, we aim to predict not only vehicle trajectories but also predict human behavior action inputs (steering,acceleration and breaking).
+
+
+## Project Description
+In order to predict a vehicle trajectory it has to be determined what the human driver behaves. Furthermore humans differ, and their behavior can differ. Consequently, we view human driving behavior as a multimodal distribution. This conditions the distribution of the resulting trajectory, from which needs to be sampled from. 
+
+We propose the use of conditioned diffusion models as a method of performing both of the previously mentioned steps. Diffusion models are able to model multimodal behavior, can easily introduce conditioning variables and sample directily from the conditioned trajectory distribution. 
+
+![image](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/d0f50da3-fe63-4367-8153-ebed1eab75d0)
+
+##  How to Install and Run the Project
+Clone the project in a directory of you choice:
+'''bash
+git clone
+'''
+
+
+We suggest to create a conda environment and install the requirements. Enter the repository and run:
+'''bash
+conda create --name <env> --file requirements.txt
+'''
+
+
+
 
 
 ## Leveraging Human Intent for Shared Autonomy and Risk Negotiation
