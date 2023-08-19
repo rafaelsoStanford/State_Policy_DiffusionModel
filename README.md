@@ -34,20 +34,42 @@ Replace <env-name> with the desired name for your conda environment.
 The datasets are generated using PID controllers to simulate various driving behaviors following different trajectories. These trajectories are controlled and deterministic, providing valuable ground truth data for the project.
 Possible trajectories are:
     
-- Parallel: Simulates vehicles driving on different sides of the road in a parallel manner.
-- Sinusoidal: Mimics a drunk driving behavior with a sinusoidal trajectory.
+- Parallel: Simulates vehicles driving on different sides of the road in a parallel manner.\
+![SafeDriver](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/ff83bbab-d324-405f-b2ab-8469a6ebfb3a)
 
-Enter the folder 
+- Sinusoidal: Mimics a drunk driving behavior with a sinusoidal trajectory.\
+![SlalomDriverSafe](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/b851ca09-a1ef-4f0d-99af-eb49c7f63393)
+
+
+Navigate to the generateData folder using the following command:
 
 ```console
 cd generateData
 ```
 
-Once you're in the generateData folder, you can execute a generation script of your choice using the following command: `python filename.py`. 
+Once you're in the generateData folder, you can execute a generation script of your choice using the following command: 
+```console
+python <filename>.py. 
+```
+> If you need help or additional information about the available options, you can use the --help flag: `python filename.py --help`. 
 
-If you need help or additional information about the available options, you can use the --help flag: `python filename.py --help`. 
+After a successful run, you should find the dataset saved under `/data`.
 
+### Training
+Navigate to the base repository folder and run:
+```console
+python train.py --dataset="<Name-of-your-dataset>.zarr.zip"
+```
+> Make sure your dataset is saved at ./data, as the script assumes this path. \
+> If you need help or additional information about the available options, you can use the `--help` flag
 
+The trained model will learn from the dataset to make predictions. Depending on the flags you set, it can predict either trajectories, actions or a mixed output with both vectors stacked.
+
+### Generate Predictions
+In order to generate predictions you can run 
+```console
+python generate.py --dataset="<Name-of-your-dataset>.zarr.zip"
+```
 
 
 ## Leveraging Human Intent for Shared Autonomy and Risk Negotiation
