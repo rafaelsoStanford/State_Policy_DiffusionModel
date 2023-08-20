@@ -70,6 +70,10 @@ Using the Generate Data scripts, you can create a testing trajectory.
 ```console
 python <filename>.py. --num_episodes_per_mode=1 --dataset_name=<Name-of-your-training-dataset> --modes=['middle']
 ```
+Create an animations folder:
+```console
+mkdir animations
+```
 
 In order to generate predictions you can run 
 ```console
@@ -77,8 +81,8 @@ python generate.py --dataset="<Name-of-your-training-dataset>.zarr.zip"
 ```
 > **Be sure to load a dataset which is not the one you used for training.**
 
-You should generate similar animation: 
-- ### Position predictions
+You should generate similar animation displaying the denoising process of diffusion: 
+- ### Denoising Position predictions
 
 ![ezgif-2-d597b316fe](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/d79dccfc-5b39-49c8-b06a-646e04a8186f)
 
