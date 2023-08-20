@@ -99,8 +99,10 @@ You should generate similar animation displaying the denoising process of diffus
 ![ezgif-2-4ddb5e06c7](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/5ff57507-a842-4701-99ab-dcc5369eb460)
 
 
-### Run Simulation
+### Run Simulation for position estimations
+To perform a simulation where trajectories are estimated within the environment and displayed in the renderer, you can execute the relevant simulation script. The specifics of the simulation will depend on your project's details.
+The final result should be a video file as below: 
 
-Finally you can run a Simulation where the trajectories are estimation inside of the environment and displayed inside of the renderer.
+![ezgif-4-4cd908c631](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/c14801f1-290b-4106-9c7f-eddaaf32d829)
 
 
