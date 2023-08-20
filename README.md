@@ -90,6 +90,13 @@ You should generate similar animation displaying the denoising process of diffus
 ![ezgif-2-c74990b1a0](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/b02db002-237d-4433-af4a-ef296ad2de73) 
 
 
+- ### Denoising Action predictions
+[DDPM Sampling](https://arxiv.org/abs/2006.11239) \
+![ezgif-2-de151b418c](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/58b98515-9848-4efd-a63c-9bece681d873)
+
+
+[DDIM Sampling](https://arxiv.org/abs/2010.02502) \
+![ezgif-2-4ddb5e06c7](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/5ff57507-a842-4701-99ab-dcc5369eb460)
 
 
 ### Run Simulation
