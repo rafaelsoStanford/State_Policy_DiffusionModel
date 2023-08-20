@@ -84,10 +84,11 @@ python generate.py --dataset="<Name-of-your-training-dataset>.zarr.zip"
 You should generate similar animation displaying the denoising process of diffusion: 
 - ### Denoising Position predictions
 
-![ezgif-2-d597b316fe](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/d79dccfc-5b39-49c8-b06a-646e04a8186f)
+![ezgif-2-d597b316fe](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/d79dccfc-5b39-49c8-b06a-646e04a8186f) \
+[DDPM Sampling](https://arxiv.org/abs/2006.11239)
 
-![ezgif-2-c74990b1a0](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/b02db002-237d-4433-af4a-ef296ad2de73)
-
+![ezgif-2-c74990b1a0](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/b02db002-237d-4433-af4a-ef296ad2de73) \
+[DDIM Sampling](https://arxiv.org/abs/2010.02502)
 
 
 
