@@ -66,6 +66,11 @@ python train.py --dataset="<Name-of-your-dataset>.zarr.zip"
 The trained model will learn from the dataset to make predictions. Depending on the flags you set, it can predict either trajectories, actions or a mixed output with both vectors stacked.
 
 ### Generate Predictions
+Using the Generate Data scripts, you can create a testing trajectory.
+```console
+python <filename>.py. --num_episodes_per_mode=1 --dataset_name=<Name-of-your-training-dataset> --modes=['middle']
+```
+
 In order to generate predictions you can run 
 ```console
 python generate.py --dataset="<Name-of-your-training-dataset>.zarr.zip"
@@ -73,10 +78,14 @@ python generate.py --dataset="<Name-of-your-training-dataset>.zarr.zip"
 > **Be sure to load a dataset which is not the one you used for training.**
 
 You should generate similar animation: 
+- ### Position predictions
 
-![2023_07_30_14-01-43animation_actions](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/6c7512d7-240f-412c-a87c-19f75e7c2757)
+![ezgif-2-d597b316fe](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/d79dccfc-5b39-49c8-b06a-646e04a8186f)
 
-![2023_07_30_14-01-43animation_positions](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/b558e792-cf9e-4fd9-b972-351095689397)
+![ezgif-2-c74990b1a0](https://github.com/rafaelsoStanford/State_Policy_DiffusionModel/assets/130123073/b02db002-237d-4433-af4a-ef296ad2de73)
+
+
+
 
 ### Run Simulation
 
